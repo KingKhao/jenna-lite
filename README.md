@@ -1,6 +1,6 @@
 # Jenna Lite
 
-A free, private AI assistant that runs on your own Windows PC. She talks, listens, remembers you, keeps your
+A free, private AI assistant that runs on your own computer - Windows or Mac. She talks, listens, remembers you, keeps your
 reminders and goals, searches the web, and keeps everything she learns in a folder of notes you own: her Brain.
 No account, no subscription, and nothing you say goes to an AI company. Her brain is an open model running on
 your graphics card.
@@ -39,30 +39,39 @@ Made by [Clinch Valley Digital](https://clinchvalleydigital.com). Built with ide
 
 ## What you need
 
-- Windows 10 or 11.
-- An NVIDIA graphics card with **8 GB or more** is recommended (12 GB+ runs the bigger, smarter model). It also
-  runs without one, just slower.
-- About **15 GB** of free disk space, and an internet connection for the first install.
-- A microphone if you want to talk to her.
+**Windows 10 or 11**, or a **Mac** (Apple Silicon M1 or newer recommended; Intel Macs work, slower). Mac support is new:
+it's tested automatically on a Mac on every change, but tell us if anything is off.
 
-## Install
-
-1. [Download Jenna-Lite.zip](https://github.com/KingKhao/jenna-lite/releases/latest/download/Jenna-Lite.zip), then unzip it
-   somewhere permanent, for example `Documents\Jenna Lite` (right-click the zip > Extract All).
-2. Double-click **Install Jenna Lite.cmd**. If Windows shows "Windows protected your PC", click **More info > Run anyway**
-   (it's a plain script; you can read it first). It installs what's missing (Python, Ollama, FFmpeg), downloads her
-   voice and a brain sized for your graphics card, and adds a **Jenna Lite** icon to your Desktop. The first run
-   takes 10 to 30 minutes, mostly the model download.
-3. Her setup screen opens. Answer a few questions (your name, hers, her personality, where her Brain lives),
-   connect Telegram and your phone if you like, and start talking.
-
-Running the installer again is safe: it repairs anything missing and never touches your notes or settings.
-
-| Graphics memory | Model she uses | Download |
+| Your computer | Model she uses | Download |
 |---|---|---|
-| 12 GB or more | qwen3:14b | ~9 GB |
-| 8 GB or more | qwen3:8b | ~5 GB |
-| Less, or no NVIDIA card | qwen3:4b | ~2.5 GB |
+| Windows, NVIDIA card with 12 GB+ / Mac with 32 GB+ memory | qwen3:14b | ~9 GB |
+| Windows, NVIDIA card with 8 GB+ / Mac with 16 GB+ memory | qwen3:8b | ~5 GB |
+| Smaller, no NVIDIA card, or an Intel Mac | qwen3:4b | ~2.5 GB |
+
+About **15 GB** of free disk space, an internet connection for the first install, and a microphone if you want to talk.
+
+## Install on Windows
+
+1. [Download Jenna-Lite.zip](https://github.com/KingKhao/jenna-lite/releases/latest/download/Jenna-Lite.zip), then right-click it >
+   Extract All, somewhere permanent (for example `Documents\Jenna Lite`).
+2. Double-click **Install Jenna Lite.cmd**. If Windows shows "Windows protected your PC", click **More info > Run anyway**.
+3. Her setup screen opens. Answer a few questions and start talking. The first install takes 10 to 30 minutes, mostly the
+   model download.
+
+## Install on a Mac
+
+1. [Download Jenna-Lite.zip](https://github.com/KingKhao/jenna-lite/releases/latest/download/Jenna-Lite.zip) (the same file -
+   it has both installers). Double-click it to unzip, and move the **Jenna Lite** folder somewhere permanent, like Documents.
+2. Double-click **Install Jenna Lite (Mac).command**. If macOS says it can't check the file for malware, open
+   **System Settings > Privacy & Security**, scroll down and click **Open Anyway** (once). Or open Terminal and run:
+   `bash ~/Documents/"Jenna Lite"/install-mac.sh`
+3. It installs Python and Ollama for you (no password needed), downloads her voice and brain, and adds **Jenna Lite** to
+   Applications and your Desktop. Her setup screen opens when it's done.
+
+On a Mac, talk to her with the mic button or by tapping the galaxy (the F8 push-to-talk key is Windows-only for now).
+She opens in Chrome, Edge or Brave as an app window if you have one, otherwise in Safari.
+
+Running the installer again is safe on both: it repairs anything missing and never touches your notes or settings.
 
 ## Privacy
 
@@ -92,7 +101,7 @@ Running the installer again is safe: it repairs anything missing and never touch
   fix what's off.
 - **Menu > Logs**, or `data\jenna.log` in this folder.
 - She didn't start: open **Ollama** from the Start menu, then the Jenna Lite icon.
-- To remove her: double-click **Uninstall Jenna Lite.cmd** (your Brain folder is kept), then delete this folder.
+- To remove her: double-click **Uninstall Jenna Lite.cmd** (Mac: **Uninstall Jenna Lite (Mac).command**). Your Brain folder is kept; then delete this folder.
 
 ## For developers
 

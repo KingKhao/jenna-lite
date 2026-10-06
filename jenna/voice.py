@@ -31,6 +31,9 @@ def available():
 
 
 def _ffmpeg():
+    for mac in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
+        if not shutil.which("ffmpeg") and Path(mac).exists():
+            return mac
     return shutil.which("ffmpeg") or next(
         (str(p) for p in Path.home().glob(r"AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg*\**\bin\ffmpeg.exe")), None)
 

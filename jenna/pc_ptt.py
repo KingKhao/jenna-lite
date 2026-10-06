@@ -7,8 +7,8 @@ import logging
 import tempfile
 import threading
 import time
+import sys
 import uuid
-import winsound
 from pathlib import Path
 
 from .settings import load_config
@@ -39,7 +39,11 @@ def _pick_mic():
     return None
 
 
+SUPPORTED = sys.platform == "win32"   # macOS: use the mic button in the app (a global hotkey needs Accessibility access)
+
+
 def _beep(freq, ms):
+    import winsound
     threading.Thread(target=winsound.Beep, args=(freq, ms), daemon=True).start()
 
 
@@ -148,6 +152,7 @@ def _process(pc_api, frames, early=None):
                     path = pc_api.take_audio(url.rsplit("/", 1)[-1])
                     if path and not _state["cut"]:
                         _state["playing"] = True
+                        import winsound
                         winsound.PlaySound(str(path), winsound.SND_FILENAME)
                         _state["playing"] = False
                     if path:
@@ -167,6 +172,7 @@ def _cut_in_then_listen():
     """The key while she's talking: stop her mid-sentence (and skip the rest), then listen."""
     from . import memory
     _state["cut"] = True
+    import winsound
     winsound.PlaySound(None, 0)          # stops the sound that's playing
     memory.set_state(cut_in=time.time())
     log.info("push-to-talk: cut her off")
@@ -218,6 +224,9 @@ def start(pc_api):
 
 def rebind():
     """(Re)register the hotkey - called at start and when it's changed in Settings, no restart needed."""
+    if not SUPPORTED:
+        log.info("push-to-talk hotkey: Windows only for now - use the mic in the app")
+        return
     try:
         import keyboard
         for h in _hooks:

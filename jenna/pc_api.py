@@ -9,6 +9,7 @@ through Tailscale the visitor must be the Tailscale account setup allowed; cross
 """
 import json
 import logging
+import sys
 import queue
 import re
 import secrets
@@ -462,7 +463,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"name": cfg.get("assistant_name"), "owner": cfg.get("owner_name"),
                                     "setup_done": bool(cfg.get("setup_done")), "voice": cfg.get("voice"),
                                     "model": cfg.get("model"), "telegram": bool(_bot and _bot.enabled and _bot.owner),
-                                    "mic": mic_status(), "local": self._local(), "ptt_key": cfg.get("push_to_talk_key", "f8").upper()})
+                                    "mic": mic_status(), "local": self._local(), "ptt_key": cfg.get("push_to_talk_key", "f8").upper() if sys.platform == "win32" else ""})
         if u.path.startswith("/api/audio/"):
             wav = take_audio(u.path.rsplit("/", 1)[-1])
             if not wav or not Path(wav).exists():

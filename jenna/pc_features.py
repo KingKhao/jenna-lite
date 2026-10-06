@@ -187,8 +187,25 @@ def history(q="", n=100):
 
 
 # ============================== Hardware / models ==============================
+def _mac():
+    """(chip name, usable memory for the model in GB) on a Mac. Apple Silicon shares one pool of memory between the
+    processor and graphics, so the model size follows total memory; Intel Macs run on the processor."""
+    try:
+        ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=5).stdout) / 2**30
+        chip = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, timeout=5).stdout.strip()
+    except Exception:
+        return None, 0
+    if "Apple" not in chip:
+        return chip or "Intel Mac", 0
+    usable = 12 if ram >= 31 else 8 if ram >= 15 else 4   # leaves room for macOS and her other parts
+    return f"{chip} ({ram:.0f} GB unified memory)", usable
+
+
 def gpu():
-    """(name, VRAM in GB) of the NVIDIA card, or (None, 0)."""
+    """(name, VRAM in GB) of the NVIDIA card (or a Mac's usable unified memory), or (None, 0)."""
+    import sys
+    if sys.platform == "darwin":
+        return _mac()
     exe = shutil.which("nvidia-smi")
     if not exe:
         return None, 0

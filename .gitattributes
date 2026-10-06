@@ -1,0 +1,6 @@
+# shell scripts must keep Unix line endings or macOS cannot run them
+*.sh text eol=lf
+*.command text eol=lf
+*.icns binary
+*.ico binary
+*.png binary

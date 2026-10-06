@@ -752,7 +752,7 @@ async function menuSettings(msg) {
     <label>Units</label><select id="st-units"><option value="us">°F, miles</option><option value="metric">°C, km</option></select>
     <label><input type="checkbox" id="st-morning" style="width:auto"> Morning check-in at <input id="st-mtime" type="time" style="width:auto" value="${esc(s.morning_time)}"></label>
     <label>Get-to-know-you questions per morning</label><input id="st-q" type="number" min="0" max="5" value="${s.questions_per_day}">
-    <label>Push-to-talk key (works in any app)</label><select id="st-pttkey"><option value="f8">F8</option><option value="f9">F9 (also opens Edge's Reading mode)</option><option value="f2">F2</option><option value="f4">F4</option><option value="pause">Pause</option></select>
+    <label class="ptt-tip">Push-to-talk key (works in any app, Windows)</label><select id="st-pttkey"><option value="f8">F8</option><option value="f9">F9 (also opens Edge's Reading mode)</option><option value="f2">F2</option><option value="f4">F4</option><option value="pause">Pause</option></select>
     <label>How the key works</label><select id="st-ptt"><option value="hold">Hold it while you talk</option><option value="tap">Tap to start, tap again to send</option></select>
     <label>Her personality (she re-reads it every message - edit freely)</label><textarea id="st-pers" style="min-height:220px">${esc(s.personality)}</textarea>
     <div style="margin-top:12px"><button class="nbtn primary" id="st-save">Save</button></div></div>
@@ -953,7 +953,7 @@ async function setupRender() {
       : `<p>Her brain, <b>${esc(s.model)}</b>, still needs to download (a few GB, one time).</p><div class="bar2"><i id="su-bar" style="width:${pulling ? p.pct : 0}%"></i></div>
          <div class="small muted" id="su-pst">${pulling ? esc(p.status) : p.error ? "Download failed: " + esc(p.error) : ""}</div>
          <button class="nbtn primary" id="su-pull" ${pulling ? "disabled" : ""}>${pulling ? "Downloading..." : "Download now"}</button>`;
-    b.innerHTML = stepper() + `<h1>Her brain</h1><p class="lead">${s.gpu ? `Your graphics card: <b>${esc(s.gpu)}</b> (${s.vram_gb} GB).` : "No NVIDIA graphics card found - she'll run on the processor, slower but working."} ${s.recommended_model !== s.model ? `Recommended for it: <b>${esc(s.recommended_model)}</b>.` : ""}</p>
+    b.innerHTML = stepper() + `<h1>Her brain</h1><p class="lead">${s.gpu && s.gpu.includes("unified memory") ? `Your Mac: <b>${esc(s.gpu)}</b>.` : s.gpu && s.vram_gb ? `Your graphics card: <b>${esc(s.gpu)}</b> (${s.vram_gb} GB).` : "No NVIDIA graphics card or Apple chip found - she'll run on the processor, slower but working."} ${s.recommended_model !== s.model ? `Recommended for it: <b>${esc(s.recommended_model)}</b>.` : ""}</p>
       <div class="card">${card}</div>
       <div style="margin-top:16px"><button class="nbtn" id="su-back">Back</button> <button class="nbtn" id="su-re">Check again</button> <button class="nbtn primary" id="su-next" ${s.model_ready ? "" : "disabled"}>Next</button></div>`;
     $("su-back").onclick = () => { setupIdx = 1; setupRender(); }; $("su-re").onclick = setupRender; $("su-next").onclick = next;
@@ -966,21 +966,22 @@ async function setupRender() {
   } else {
     b.innerHTML = stepper() + `<h1>${esc(ME)} is ready</h1><p class="lead">Tap the galaxy to talk, or type in Chat. A few things to try:</p>
       <div class="card"><div>&#8226; "Remind me to stretch at 3 pm"</div><div>&#8226; "What's the weather this weekend?"</div><div>&#8226; "Remember that I'm allergic to cats"</div><div>&#8226; "Take a note: ideas for the garden..."</div><div>&#8226; "Ask me something so you get to know me"</div></div>
-      <p class="small muted">Hold <b class="pttk">F8</b> anywhere on the PC to talk without opening the app. Everything she learns is saved as notes in your Brain folder.</p>
+      <p class="small muted"><span class="ptt-tip">Hold <b class="pttk">F8</b> anywhere on the PC to talk without opening the app. </span> Everything she learns is saved as notes in your Brain folder.</p>
       <button class="nbtn primary" id="su-done">Start talking</button>
       <p class="credit">Jenna Lite by <a href="https://clinchvalleydigital.com" target="_blank" rel="noopener noreferrer">Clinch Valley Digital</a> &middot; built with ideas from <a href="https://hellotrillion.ai" target="_blank" rel="noopener noreferrer">hellotrillion.ai</a></p>`;
     $("su-done").onclick = async () => { const r = await api("/api/setup/finish", {}); if (r.error) { alert(r.error); return; } closeSetup(); show("home"); };
   }
 }
 let setupDraft = null, PTT = "F8";
-function setPttKey(k) { PTT = k; document.querySelectorAll(".pttk").forEach(e => e.textContent = k); }
+function setPttKey(k) { PTT = k; document.querySelectorAll(".pttk").forEach(e => e.textContent = k);
+  if (!k) document.querySelectorAll(".pc-only, .ptt-tip").forEach(e => e.remove()); }   // Mac: no global hotkey (yet)
 function applyName(n) { ME = n || "Jenna"; $("who-name").textContent = ME; document.title = ME; $("nav-name").textContent = ME; $("box").placeholder = "Message " + ME + "..."; }
 
 // ---------------- startup ----------------
 (async () => {
   try {
     const s = await api("/api/status");
-    LOCAL = s.local; applyName(s.name); setPttKey(s.ptt_key || "F8");
+    LOCAL = s.local; applyName(s.name); setPttKey(s.ptt_key ?? "F8");
     $("status-text").textContent = (s.telegram ? "app + Telegram" : "on this PC") + " · " + s.model;
     if (!s.mic.ok && !PHONE) $("hint").innerHTML = '<span class="warn">No microphone detected. Plug in a headset or USB mic to talk to her.</span>';
     if (!s.setup_done && LOCAL) openSetup(0);

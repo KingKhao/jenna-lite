@@ -1,0 +1,29 @@
+# Runs on every push: her offline tests on Windows, and the real Mac installer (minus the big model download) on an
+# Apple Silicon Mac. Public repositories get these machines free.
+name: tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.lock
+      - run: python tests/run_tests.py
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the Mac installer (JENNA_CI skips Ollama, the model and launching; it runs the tests at the end)
+        run: JENNA_CI=1 bash install-mac.sh
+      - name: Check what it made
+        run: |
+          test -x "$HOME/Applications/Jenna Lite.app/Contents/MacOS/JennaLite"
+          test -f "$HOME/Applications/Jenna Lite.app/Contents/Resources/jenna-lite.icns"
+          plutil -lint "$HOME/Library/LaunchAgents/com.clinchvalleydigital.jennalite.plist"
+          .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from jenna import pc_features; print('mac hardware:', pc_features.gpu())"

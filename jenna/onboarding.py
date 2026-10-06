@@ -160,7 +160,9 @@ def _tailscale():
     exe = shutil.which("tailscale")
     if exe:
         return exe
-    for p in (Path(r"C:\Program Files\Tailscale\tailscale.exe"), Path(r"C:\Program Files (x86)\Tailscale\tailscale.exe")):
+    for p in (Path(r"C:\Program Files\Tailscale\tailscale.exe"), Path(r"C:\Program Files (x86)\Tailscale\tailscale.exe"),
+              Path("/Applications/Tailscale.app/Contents/MacOS/Tailscale"), Path("/usr/local/bin/tailscale"),
+              Path("/opt/homebrew/bin/tailscale")):
         if p.exists():
             return str(p)
     return None
