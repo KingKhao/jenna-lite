@@ -156,6 +156,18 @@ PROVIDERS = [
                "Paste all four below. Connecting runs one small test (a fraction of a cent)."],
      "fields": [{"key": "api_key", "label": "API Key", "secret": True}, {"key": "api_secret", "label": "API Key Secret", "secret": True},
                 {"key": "access_token", "label": "Access Token", "secret": True}, {"key": "access_secret", "label": "Access Token Secret", "secret": True}]},
+    # ---------------- add-ons (separate free apps the user installs) ----------------
+    {"id": "image_video", "group": "Add-ons", "name": "Image & video creation", "status": "addon", "color": "#8B5CF6",
+     "does": "Make pictures, edit photos and create short videos on your own PC, free. It's a separate app (ComfyUI) - "
+             "she can't drive it yet, but /imageprompt has her write the prompts for you.",
+     "links": [{"label": "Download ComfyUI Desktop (free)", "url": "https://docs.comfy.org/installation/desktop/windows"}],
+     "steps": ["Download ComfyUI Desktop for Windows (NVIDIA) from [docs.comfy.org](https://docs.comfy.org/installation/desktop/windows) and install it like any app. It needs an NVIDIA graphics card; each model is a few GB.",
+               "Open ComfyUI, click Workflow > Browse Templates. It offers to download the model files a template needs - say yes.",
+               "Pictures: pick the Z-Image Turbo text-to-image template ('Text to Image'). It's fast (8 steps) and can put readable text on images.",
+               "Photo editing: pick a FLUX.2 [klein] template to change a photo with words ('swap the background for a beach at sunset'). It wants a card with about 13 GB of memory.",
+               "Video: open the Video templates and pick Wan 2.2 5B (text or picture to video) - it runs on cards with 8 GB.",
+               "Ask her for a prompt first: type /imageprompt and describe what you want. Paste her prompt into ComfyUI's text box.",
+               "Tip: she and ComfyUI share your graphics card. If ComfyUI runs out of memory, close Ollama from the icon by the clock while you create, then open it again."]},
     {"id": "tiktok", "group": "Social media", "name": "TikTok", "status": "later", "color": "#010101",
      "does": "Until an app passes TikTok's 2-4 week audit, every post it makes is forced to private. Coming once Jenna Lite is approved."},
     {"id": "linkedin", "group": "Social media", "name": "LinkedIn", "status": "later", "color": "#0A66C2",
@@ -192,7 +204,7 @@ def connected(pid):
 
 
 def connected_ids(kind=None):
-    return [p["id"] for p in PROVIDERS if (not kind or p.get("kind") == kind) and p["status"] != "later"
+    return [p["id"] for p in PROVIDERS if (not kind or p.get("kind") == kind) and p["status"] not in ("later", "addon")
             and not p.get("special") and connected(p["id"])]
 
 
@@ -238,7 +250,7 @@ def overview():
 
 def connect(pid, fields):
     p = BY_ID.get(pid)
-    if not p or p["status"] == "later" or p.get("special"):
+    if not p or p["status"] in ("later", "addon") or p.get("special"):
         raise ValueError("That one can't be connected here.")
     fields = {k: str(v).strip() for k, v in (fields or {}).items()}
     missing = [f["label"] for f in p["fields"] if not f.get("optional") and not fields.get(f["key"]) and not f.get("placeholder")]

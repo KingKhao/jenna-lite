@@ -30,6 +30,8 @@ Made by [Clinch Valley Digital](https://clinchvalleydigital.com). Built with ide
   - **Notion:** search, read and add to the pages you share with her.
   - **Social:** Facebook Pages, Instagram (Business/Creator), Threads and X. She drafts and publishes after your Yes. These use your own
     free developer app; X bills you per post.
+  - **Add-on: image & video creation.** A Connect card walks you through installing the free ComfyUI app (Z-Image Turbo pictures,
+    FLUX.2 klein photo edits, Wan 2.2 video). It is a separate app; /imageprompt has her write the prompts.
   - Coming later (they need approved apps first): Outlook/Microsoft 365 email, Google Workspace email, TikTok, LinkedIn, YouTube, Pinterest.
 - **Appointments.** Tell her "dentist Thursday at 2" and it's on the Today tab with a reminder 30 minutes before.
 - **Your personality.** Pick a starting personality (warm friend, sharp professional, hype coach or calm

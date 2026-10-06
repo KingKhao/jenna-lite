@@ -339,9 +339,12 @@ def connections_overview_and_validation():
                  "facebook", "instagram", "threads", "x", "tiktok", "outlook_mail"):
         assert want in ids, want
     assert all(p["status"] == "later" or p.get("special") or p.get("steps") for p in d), "every connectable card has steps"
+    addon = next(p for p in d if p["id"] == "image_video")
+    assert addon["status"] == "addon" and addon["links"][0]["url"].startswith("https://docs.comfy.org/")
     for pid, fields, words in [("gmail", {"address": "not-an-email", "password": "x"}, "email address"),
                                ("notion", {"token": "abc"}, "ntn_"), ("slack", {"bot_token": "xapp-1", "app_token": "xoxb-1"}, "xoxb"),
-                               ("gmail", {"address": ""}, "Fill in"), ("tiktok", {}, "can't be connected")]:
+                               ("gmail", {"address": ""}, "Fill in"), ("tiktok", {}, "can't be connected"),
+                               ("image_video", {}, "can't be connected")]:
         try:
             connections.connect(pid, fields)
             raise AssertionError(f"{pid} should have been refused")

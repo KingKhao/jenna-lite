@@ -599,7 +599,7 @@ async function loadToday() {
 }
 
 // ---------------- connect ----------------
-const STATUS_TAG = { advanced: '<span class="tagp adv">Advanced setup</span>', paid: '<span class="tagp paid">Paid by you</span>' };
+const STATUS_TAG = { advanced: '<span class="tagp adv">Advanced setup</span>', paid: '<span class="tagp paid">Paid by you</span>', addon: '<span class="tagp adv">Separate free app</span>' };
 const mdLinks = s => esc(s).replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
 let connData = null;
 async function loadConnections(openId) {
@@ -639,6 +639,14 @@ function connDetail(id) {
     b.innerHTML = h; $("c-back").onclick = () => loadConnections();
     $("c-off").onclick = async () => { if (!confirm("Disconnect " + p.name + "? Its password or key is removed from this PC.")) return; await api("/api/connections/disconnect", { id: p.id }); loadConnections(); };
     if (p.pairing_code) { const t = setInterval(async () => { if (!$("c-off")) return clearInterval(t); const d = await api("/api/connections"); const q = d.providers.find(x => x.id === p.id); if (q && !q.pairing_code) { clearInterval(t); connData = d.providers; connDetail(p.id); } }, 3000); }
+    return;
+  }
+  if (p.status === "addon") {
+    b.innerHTML = h + `<div style="margin:6px 0 16px">${(p.links || []).map(l => `<a class="nbtn primary" style="display:inline-block;text-decoration:none" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join(" ")}</div>
+      <h3>How to set it up</h3><ol class="csteps">${p.steps.map(s => `<li>${mdLinks(s)}</li>`).join("")}</ol>
+      <button class="nbtn" id="c-try">Try /imageprompt in chat</button></div>`;
+    $("c-back").onclick = () => loadConnections();
+    $("c-try").onclick = () => { show("chat"); box.value = "/imageprompt "; box.focus(); };
     return;
   }
   h += `<h3>How to connect</h3><ol class="csteps">${p.steps.map(s => `<li>${mdLinks(s)}</li>`).join("")}</ol>`;
