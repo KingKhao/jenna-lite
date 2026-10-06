@@ -170,7 +170,8 @@ PROVIDERS = [
                "Then just ask her: \"make a picture of...\" (she writes the detailed prompt), or send a photo with the paperclip and say what to change. Pictures are saved in Pictures/Jenna Lite.",
                "Tip: new pictures handle lettering well (signs, flyers); photo edits are less reliable with words - for text, ask for a new picture instead.",
                "Tip: she and ComfyUI share your graphics card - she hands it over automatically for each picture, so her next reply takes a few seconds longer.",
-               "Leave ComfyUI open, then press Test & connect below (it finds ComfyUI by itself). Video from chat is coming next; for now make videos in ComfyUI."],
+               "For videos, open the Wan 2.2 5B video template once too, so it downloads the video model (about 18 GB).",
+               "Leave ComfyUI open, then press Test & connect below (it finds ComfyUI by itself)."],
      "fields": [{"key": "url", "label": "ComfyUI address (leave empty to find it)", "optional": True,
                  "placeholder": "auto"}]},
     {"id": "tiktok", "group": "Social media", "name": "TikTok", "status": "later", "color": "#010101",
@@ -354,7 +355,13 @@ def tool_schemas():
                      "count": {"type": "integer", "description": "1-4 (default 1)"}}, ["prompt"]),
                 _fn("edit_photo", "Edit the last photo the user sent (paperclip in the app, or a photo on Telegram) from a "
                     "plain instruction like 'replace the background with a beach at sunset'. The user confirms first.",
-                    {"instruction": S}, ["instruction"])]
+                    {"instruction": S}, ["instruction"]),
+                _fn("make_video", "Make a short video (2-5 seconds) with ComfyUI. Write the prompt yourself: 40-80 words "
+                    "describing the scene, the motion and the camera movement. from_photo=true brings the user's last photo "
+                    "to life. Takes several minutes; the user confirms first.",
+                    {"prompt": S, "seconds": {"type": "integer", "description": "2-5 (default 4)"},
+                     "orientation": {"type": "string", "enum": ["landscape", "portrait"]},
+                     "from_photo": {"type": "boolean"}}, ["prompt"])]
     social = [i for i in SOCIAL if connected(i)]
     if social:
         plat = {"type": "string", "enum": social}
@@ -366,7 +373,7 @@ def tool_schemas():
     return out
 
 
-CONFIRM = {"email_send", "notion_append", "slack_post", "social_post", "make_image", "edit_photo"}
+CONFIRM = {"email_send", "notion_append", "slack_post", "social_post", "make_image", "edit_photo", "make_video"}
 UNTRUSTED = {"email_inbox": "email", "email_search": "email", "email_read": "email", "notion_search": "notion",
              "notion_read": "notion", "social_recent": "social media"}
 
@@ -384,6 +391,11 @@ def confirm_summary(name, a):
                 "\n\nShe hands the graphics card to ComfyUI for about a minute.")
     if name == "edit_photo":
         return f"Edit your last photo like this?\n\n{str(a.get('instruction', ''))[:500]}"
+    if name == "make_video":
+        secs = max(2, min(int(a.get("seconds") or 4), 5))
+        src = " from your last photo" if a.get("from_photo") else ""
+        return (f"Make a {secs}-second video{src} ({a.get('orientation') or 'landscape'})?\n\n{str(a.get('prompt', ''))[:700]}"
+                "\n\nVideos take several minutes; she hands the graphics card to ComfyUI until it's done.")
     if name == "social_post":
         plat = BY_ID.get(a.get("platform"), {}).get("name", a.get("platform"))
         cost = "\n\n(X charges about 1.5 cents for this post, about 20 cents if it has a link.)" if a.get("platform") == "x" else ""
@@ -405,11 +417,14 @@ def execute(name, a):
     if name.startswith("social_"):
         from . import conn_social
         return conn_social.execute(name, a)
-    if name in ("make_image", "edit_photo"):
+    if name in ("make_image", "edit_photo", "make_video"):
         from . import conn_comfy
         try:
             if name == "make_image":
                 return conn_comfy.start_picture(a.get("prompt", ""), a.get("aspect") or "square", a.get("count") or 1)
+            if name == "make_video":
+                return conn_comfy.start_video(a.get("prompt", ""), a.get("seconds") or 4, a.get("orientation") or "landscape",
+                                              bool(a.get("from_photo")))
             return conn_comfy.start_edit(a.get("instruction", ""))
         except Exception as e:
             return f"Couldn't reach ComfyUI ({type(e).__name__}) - is it open?"

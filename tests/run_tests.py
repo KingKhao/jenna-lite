@@ -478,8 +478,11 @@ class FakeComfy:
                     return self._send(200, fake.models.get(self.path.split("/")[2], []))
                 if self.path.startswith("/history/"):
                     pid = self.path.split("/")[2]
+                    wf = fake.prompts[int(pid[1:]) - 1]
+                    ext = ".mp4" if any(n["class_type"] == "SaveVideo" for n in wf.values()) else ".png"
                     return self._send(200, {pid: {"status": {"status_str": "success"},
-                                                  "outputs": {"9": {"images": [{"filename": f"jenna-lite_{pid}.png", "subfolder": "jenna-lite", "type": "output"}]}}}})
+                                                  "outputs": {"9": {"images": [{"filename": f"jenna-lite_{pid}{ext}", "subfolder": "jenna-lite", "type": "output"}],
+                                                                    **({"animated": [True]} if ext == ".mp4" else {})}}}})
                 if self.path.startswith("/view"):
                     return self._send(200, fake.png, "image/png")
                 return self._send(404, {})
@@ -502,8 +505,9 @@ class FakeComfy:
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
 
 
-ALL_MODELS = {"diffusion_models": ["z_image_turbo_bf16.safetensors", "flux-2-klein-4b-fp8.safetensors"],
-              "text_encoders": ["qwen_3_4b.safetensors"], "vae": ["ae.safetensors", "flux2-vae.safetensors"]}
+ALL_MODELS = {"diffusion_models": ["z_image_turbo_bf16.safetensors", "flux-2-klein-4b-fp8.safetensors", "wan2.2_ti2v_5B_fp16.safetensors"],
+              "text_encoders": ["qwen_3_4b.safetensors", "umt5_xxl_fp8_e4m3fn_scaled.safetensors"],
+              "vae": ["ae.safetensors", "flux2-vae.safetensors", "wan2.2_vae.safetensors"]}
 
 
 def _wait_job(conn_comfy, timeout=20):
@@ -555,6 +559,17 @@ def pictures_connect_make_and_edit_with_comfyui():
     ewf = fake.prompts[-1]
     assert ewf["76"]["inputs"]["image"] == "jl_upload.png" and ewf["74"]["inputs"]["text"] == "make the sky a sunset" and fake.uploads
 
+    # video: Yes card, then a 3-second landscape clip from the last photo, saved under Videos
+    conn_comfy.videos_dir = lambda: (TMP / "Videos").mkdir(exist_ok=True) or TMP / "Videos"
+    _, pending = tools.call("make_video", {"prompt": "Gentle morning breeze moves the grass, the camera slowly pushes in", "seconds": 3})
+    assert pending and "3-second video" in pending["summary"] and "several minutes" in pending["summary"]
+    out, _ = tools.call("make_video", {"prompt": "Gentle morning breeze moves the grass, the camera slowly pushes in toward the barn",
+                                       "seconds": 3, "from_photo": True}, allow_risky=True)
+    assert out.startswith("Started a 3-second video"), out
+    _wait_job(conn_comfy)
+    vwf = fake.prompts[-1]
+    assert vwf["55"]["inputs"]["length"] == 73 and vwf["55"]["inputs"]["width"] == 1280 and vwf["55"]["inputs"]["start_image"] == ["56", 0]
+    assert list((TMP / "Videos").glob("*.mp4")), "the video is saved"
     assert "PG-13" in conn_comfy.check("a nude portrait of a woman on a beach at night")
     assert "hard no" in conn_comfy.check("a sexy photo of a teen girl in a bikini on the beach")
     assert conn_comfy.check("a cat").startswith("PROMPT TOO SHORT")
@@ -565,7 +580,7 @@ def pictures_connect_make_and_edit_with_comfyui():
 @test
 def workflow_files_are_valid_api_format():
     import json as _j
-    for name in ("picture", "edit"):
+    for name in ("picture", "edit", "video", "video_photo"):
         m = _j.loads((ROOT / "workflows" / f"{name}.json").read_text(encoding="utf-8"))
         wf = m["workflow"]
         assert m["models"] and all(n.get("class_type") and isinstance(n.get("inputs"), dict) for n in wf.values())
@@ -573,7 +588,7 @@ def workflow_files_are_valid_api_format():
             for v in node["inputs"].values():
                 if isinstance(v, list) and len(v) == 2 and isinstance(v[1], int):
                     assert v[0] in wf, (name, nid, v)
-        assert any(n["class_type"] == "SaveImage" for n in wf.values())
+        assert any(n["class_type"] in ("SaveImage", "SaveVideo") for n in wf.values())
 
 
 @test

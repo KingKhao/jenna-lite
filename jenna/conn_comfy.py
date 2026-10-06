@@ -27,8 +27,11 @@ log = logging.getLogger("jenna")
 WORKFLOWS = ROOT / "workflows"
 PORTS = ("http://127.0.0.1:8000", "http://127.0.0.1:8188")   # ComfyUI Desktop, then a manual/portable install
 SIZES = {"square": (1024, 1024), "portrait": (832, 1216), "landscape": (1216, 832)}
+VIDEO_SIZES = {"landscape": (1280, 704), "portrait": (704, 1280)}   # what Wan 2.2 5B is trained for
 DAILY_LIMIT = 30
+VIDEO_DAILY_LIMIT = 10
 JOB_TIMEOUT_S = 15 * 60
+VIDEO_TIMEOUT_S = 60 * 60
 BOT = None             # set by run_jenna: where finished pictures are delivered
 _job = {"running": False}
 _lock = threading.Lock()
@@ -44,6 +47,12 @@ LOGO_FAKE = re.compile(r"\b(official|real) (logo|ad|advert\w*) (of|for) (nike|ap
 
 def pictures_dir() -> Path:
     p = Path.home() / "Pictures" / "Jenna Lite"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def videos_dir() -> Path:
+    p = Path.home() / "Videos" / "Jenna Lite"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -103,15 +112,16 @@ def test(f):
 
 
 # ---------------- rules ----------------
-def _today_count():
+def _today_count(video=False):
     day = f"{datetime.now():%Y-%m-%d}"
-    return sum(1 for j in memory._read_json("pictures.json", []) if j.get("date") == day and j.get("ok"))
+    return sum(j.get("count", 1) for j in memory._read_json("pictures.json", [])
+               if j.get("date") == day and j.get("ok") and bool(j.get("video")) == video)
 
 
-def check(prompt, count=1, edit=False):
+def check(prompt, count=1, edit=False, video=False):
     """None if it may run, else the reason it won't."""
     if _job["running"]:
-        return "I'm already making a picture - one at a time. It'll show up here when it's done."
+        return "I'm already making something with ComfyUI - one at a time. It'll show up here when it's done."
     text = prompt or ""
     if MINORS.search(text) and (BLOCKED.search(text) or re.search(r"\b(bikini|swimsuit|kiss\w*|romantic|sexy)\b", text, re.I)):
         return "Not making that. Anything sexual or suggestive involving young people is a hard no."
@@ -124,7 +134,9 @@ def check(prompt, count=1, edit=False):
     if len(text.strip()) < (8 if edit else 25):
         return ("PROMPT TOO SHORT - describe the picture properly (subject, setting, style, colors, lighting, and any exact "
                 "text in double quotes), then try again." if not edit else "Say what to change in the photo.")
-    if _today_count() + count > DAILY_LIMIT:
+    if video and _today_count(video=True) + 1 > VIDEO_DAILY_LIMIT:
+        return f"That would pass my {VIDEO_DAILY_LIMIT}-videos-a-day limit (each one ties up the graphics card for minutes)."
+    if not video and _today_count() + count > DAILY_LIMIT:
         return f"That would pass my {DAILY_LIMIT}-pictures-a-day limit. Tomorrow's a new day."
     return None
 
@@ -161,7 +173,7 @@ def _upload_photo(url, path):
     return (d.get("subfolder") + "/" if d.get("subfolder") else "") + d["name"]
 
 
-def _run_one(url, name, values):
+def _run_one(url, name, values, timeout=JOB_TIMEOUT_S, dest_dir=None):
     wf = _fill(manifest(name)["workflow"], values)
     r = requests.post(url + "/prompt", json={"prompt": wf, "client_id": "jenna-lite"}, timeout=30)
     if r.status_code != 200:
@@ -169,7 +181,7 @@ def _run_one(url, name, values):
         raise RuntimeError(f"ComfyUI refused the job: {(err.get('error') or {}).get('message') or r.text[:200]}")
     pid = r.json()["prompt_id"]
     started = time.time()
-    while time.time() - started < JOB_TIMEOUT_S:
+    while time.time() - started < timeout:
         time.sleep(2)
         h = requests.get(f"{url}/history/{pid}", timeout=15).json().get(pid)
         if not h:
@@ -178,13 +190,15 @@ def _run_one(url, name, values):
         if status == "error":
             msgs = [m for m in (h.get("status") or {}).get("messages", []) if m and m[0] == "execution_error"]
             raise RuntimeError("ComfyUI hit an error: " + (msgs[0][1].get("exception_message", "")[:200] if msgs else "unknown"))
-        files = [img for out in (h.get("outputs") or {}).values() for img in out.get("images", []) if img.get("type") == "output"]
+        # pictures come back under "images"; SaveVideo's file too (or "videos"/"gifs" on some versions)
+        files = [img for out in (h.get("outputs") or {}).values() for key in ("images", "videos", "gifs")
+                 for img in out.get(key, []) if isinstance(img, dict) and img.get("type") == "output" and img.get("filename")]
         if files:
             saved = []
             for img in files:
                 data = requests.get(url + "/view", params={"filename": img["filename"], "subfolder": img.get("subfolder", ""),
                                                           "type": "output"}, timeout=60).content
-                dest = pictures_dir() / f"{datetime.now():%Y-%m-%d %H%M%S} {re.sub(r'[^a-z0-9]+', '-', values.get('TITLE', 'picture').lower())[:40]}{Path(img['filename']).suffix or '.png'}"
+                dest = (dest_dir or pictures_dir()) / f"{datetime.now():%Y-%m-%d %H%M%S} {re.sub(r'[^a-z0-9]+', '-', values.get('TITLE', 'picture').lower())[:40]}{Path(img['filename']).suffix or '.png'}"
                 n = 2
                 while dest.exists():
                     dest = dest.with_name(f"{dest.stem}-{n}{dest.suffix}")
@@ -192,21 +206,25 @@ def _run_one(url, name, values):
                 dest.write_bytes(data)
                 saved.append(dest)
             return saved
-    raise RuntimeError("ComfyUI took longer than 15 minutes - stopped waiting.")
+    raise RuntimeError(f"ComfyUI took longer than {timeout // 60} minutes - stopped waiting.")
 
 
-def _deliver(paths, prompt, edit):
+def _deliver(paths, prompt, edit, video=False):
     names = [p.name for p in paths]
-    text = ("Here's your edited photo" if edit else ("Here's your picture" if len(paths) == 1 else "Here are your pictures")) \
-        + f" - saved in Pictures/Jenna Lite."
-    live.publish("assistant", text, "app", kind="images", extra={"images": [f"/api/pictures/{n}" for n in names]})
+    if video:
+        text = "Here's your video - saved in Videos/Jenna Lite."
+        live.publish("assistant", text, "app", kind="video", extra={"video": f"/api/videos/{names[0]}"})
+    else:
+        text = ("Here's your edited photo" if edit else ("Here's your picture" if len(paths) == 1 else "Here are your pictures")) \
+            + " - saved in Pictures/Jenna Lite."
+        live.publish("assistant", text, "app", kind="images", extra={"images": [f"/api/pictures/{n}" for n in names]})
     memory.append_history("assistant", f"{text} ({', '.join(names)})")
     bot = BOT
     if bot is not None:
         try:
             if bot.enabled and bot.owner:
                 for p in paths:
-                    bot.send_photo(p, text if p == paths[0] else "")
+                    (bot.send_video if video else bot.send_photo)(p, text if p == paths[0] else "")
         except Exception:
             log.exception("couldn't send the picture to Telegram")
         try:
@@ -219,20 +237,21 @@ def _deliver(paths, prompt, edit):
         log_file = brain_vault.vault() / "Raw" / "pictures.md"
         log_file.parent.mkdir(parents=True, exist_ok=True)
         with log_file.open("a", encoding="utf-8") as fh:
-            fh.write(f"- {datetime.now():%Y-%m-%d %H:%M} {'edit' if edit else 'picture'}: {brain_vault.redact(prompt)[:300]} -> "
+            fh.write(f"- {datetime.now():%Y-%m-%d %H:%M} {'video' if video else 'edit' if edit else 'picture'}: {brain_vault.redact(prompt)[:300]} -> "
                      f"{', '.join(names)}\n")
     except Exception:
         log.exception("couldn't log the picture in the Brain")
 
 
-def _job_thread(name, prompts_values, prompt, edit, count):
+def _job_thread(name, prompts_values, prompt, edit, count, video=False):
     url = base_url()
     ok, outs, err = False, [], ""
     t0 = time.time()
     try:
         _unload_her_brain()
         for values in prompts_values:
-            outs += _run_one(url, name, values)
+            outs += _run_one(url, name, values, timeout=VIDEO_TIMEOUT_S if video else JOB_TIMEOUT_S,
+                             dest_dir=videos_dir() if video else None)
         ok = bool(outs)
     except requests.RequestException:
         err = "ComfyUI stopped answering - is it still open?"
@@ -247,13 +266,13 @@ def _job_thread(name, prompts_values, prompt, edit, count):
         _job["running"] = False
         with memory._lock:
             jobs = memory._read_json("pictures.json", [])
-            jobs.append({"date": f"{datetime.now():%Y-%m-%d}", "ok": ok, "count": count, "edit": edit,
+            jobs.append({"date": f"{datetime.now():%Y-%m-%d}", "ok": ok, "count": count, "edit": edit, "video": video,
                          "minutes": round((time.time() - t0) / 60, 1), "files": [p.name for p in outs], "error": err})
             memory._write_json("pictures.json", jobs[-500:])
     if ok:
-        _deliver(outs, prompt, edit)
+        _deliver(outs, prompt, edit, video)
     else:
-        msg = f"I couldn't finish that picture: {err or 'nothing came back'}"
+        msg = f"I couldn't finish that {'video' if video else 'picture'}: {err or 'nothing came back'}"
         live.publish("assistant", msg, "app")
         if BOT is not None:
             BOT.send(msg)
@@ -302,3 +321,35 @@ def start_edit(instruction):
         _job["running"] = True
     threading.Thread(target=_job_thread, args=("edit", values, instruction, True, 1), name="pictures", daemon=True).start()
     return "Started editing the photo - about a minute. It'll appear in the chat when it's ready. Tell the user that."
+
+
+def start_video(prompt, seconds=4, orientation="landscape", from_photo=False):
+    """A short video with Wan 2.2 5B: from text, or bringing the user's last photo to life. Several minutes on an
+    8-12 GB card - she says so up front, and it arrives in the chat when it's done."""
+    why = check(prompt, 1, video=True)
+    if why:
+        return why
+    url = base_url()
+    name = "video_photo" if from_photo else "video"
+    gone = missing_models(url, name)
+    if gone:
+        return f"The video model isn't downloaded in ComfyUI yet - open the {gone[0]['template']} template there once."
+    seconds = max(2, min(int(seconds or 4), 5))
+    w, h = VIDEO_SIZES.get(orientation, VIDEO_SIZES["landscape"])
+    values = {"PROMPT": prompt, "SEED": random.randint(1, 2**31 - 1), "WIDTH": w, "HEIGHT": h, "FRAMES": seconds * 24 + 1,
+              "TITLE": "video " + " ".join(prompt.split()[:5])}
+    if from_photo:
+        photo = memory.get_state().get("last_photo")
+        if not photo or not Path(photo).exists():
+            return "There's no photo to bring to life yet - ask the user to send one (the paperclip, or on Telegram)."
+        try:
+            values["IMAGE"] = _upload_photo(url, photo)
+        except Exception as e:
+            return f"Couldn't hand the photo to ComfyUI ({type(e).__name__}) - is it open?"
+    with _lock:
+        if _job["running"]:
+            return check(prompt, 1, video=True)
+        _job["running"] = True
+    threading.Thread(target=_job_thread, args=(name, [values], prompt, False, 1, True), name="pictures", daemon=True).start()
+    return (f"Started a {seconds}-second video ({orientation}). Videos take several minutes on a home graphics card; it'll "
+            "appear in the chat when it's ready. Tell the user that.")

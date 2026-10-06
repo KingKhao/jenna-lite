@@ -423,6 +423,14 @@ class Handler(BaseHTTPRequestHandler):
             if name not in GALAXY_FILES:
                 return self._json(404, {"error": "not found"})
             return self._send_file(ROOT / "pc" / "galaxy" / name, GALAXY_FILES[name])
+        if u.path.startswith("/api/videos/"):   # videos she made (loaded by <video>: key in the cookie)
+            if not self._query_authed(parse_qs(u.query)):
+                return self._json(403, {"error": "forbidden"})
+            from . import conn_comfy
+            p = conn_comfy.videos_dir() / Path(unquote(u.path.rsplit("/", 1)[-1])).name
+            if p.suffix.lower() not in (".mp4", ".webm") or not p.is_file():
+                return self._json(404, {"error": "not found"})
+            return self._send_file(p, "video/webm" if p.suffix.lower() == ".webm" else "video/mp4")
         if u.path.startswith("/api/pictures/"):   # pictures she made (loaded by <img>: key in the cookie)
             if not self._query_authed(parse_qs(u.query)):
                 return self._json(403, {"error": "forbidden"})

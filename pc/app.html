@@ -577,6 +577,7 @@ function connectLive() {
     if (ev.kind === "confirm") { confirmCard(ev.confirm_id, ev.text); return; }
     if (ev.kind === "paired") { if (setupOpen) setupRender(); return; }
     if (ev.kind === "images") { showPictures(ev.text, ev.images); return; }
+    if (ev.kind === "video") { showVideo(ev.text, ev.video); return; }
     add(ev.role === "user" ? "me" : "her", ev.text, ev.source && ev.source !== "app" ? "via " + ev.source : "");
     if (tab === "today") loadToday();
   };
@@ -613,6 +614,12 @@ function showPictures(text, images) {
     const im = document.createElement("img"); im.src = src; im.loading = "lazy"; im.alt = "A picture she made"; a.appendChild(im); g.appendChild(a); }
   d.appendChild(g); log.scrollTop = log.scrollHeight;
   if (galaxy) galSaid(undefined, text);
+}
+function showVideo(text, src) {
+  const d = add("her", text || "Here's your video.");
+  const v = document.createElement("video"); v.src = src; v.controls = true; v.playsInline = true; v.loop = true;
+  v.style.cssText = "width:100%;border-radius:10px;margin-top:8px;display:block"; d.appendChild(v);
+  log.scrollTop = log.scrollHeight; if (galaxy) galSaid(undefined, text);
 }
 $("photoIn").onchange = async () => {
   const f = $("photoIn").files[0]; if (!f) return; $("photoIn").value = "";

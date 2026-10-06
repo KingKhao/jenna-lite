@@ -186,6 +186,15 @@ class Bot:
                 requests.post(API.format(token=self.token, method="sendDocument"), timeout=180,
                               data={"chat_id": self.owner}, files={"document": (Path(path).name, fh)})
 
+    def send_video(self, path, caption=""):
+        """A finished video to Telegram (bots can send up to 50 MB; a short clip is a few MB)."""
+        if not self.enabled or not self.owner:
+            return
+        with open(path, "rb") as fh:
+            requests.post(API.format(token=self.token, method="sendVideo"), timeout=300,
+                          data={"chat_id": self.owner, "supports_streaming": "true", **({"caption": caption[:1000]} if caption else {})},
+                          files={"video": (Path(path).name, fh, "video/mp4")})
+
     def save_photo(self, file_id):
         """Keep the user's latest photo so she can edit it (edit_photo)."""
         from .settings import DATA
