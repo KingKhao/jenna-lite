@@ -164,7 +164,15 @@ def _best_lines(text, words, n):
 
 
 def _rel(p: Path) -> str:
-    return str(p.relative_to(vault())).replace("\\", "/")
+    """The note's path inside the Brain. macOS links some folders (/var is really /private/var, iCloud Documents), so
+    compare real locations when the plain paths don't line up."""
+    p = Path(p)
+    for base, path in ((vault(), p), (vault().resolve(), p.resolve())):
+        try:
+            return str(path.relative_to(base)).replace("\\", "/")
+        except ValueError:
+            continue
+    raise ValueError(f"{p} is not inside the Brain")
 
 
 def search(query: str, max_hits=8) -> str:
