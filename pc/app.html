@@ -139,6 +139,10 @@
     border-radius: 999px; padding: 3px 10px; }
   @media (min-width: 700px) { .msg, .confirm { max-width: 70%; } }
   @media (max-width: 420px) { .hbtn .lbl { display: none; } }
+  .clip { width: 40px; height: 44px; display: grid; place-items: center; color: var(--muted); cursor: pointer; flex: none; border-radius: 10px; }
+  .clip:hover { color: var(--accent); } .clip svg { width: 22px; height: 22px; }
+  .pics { display: grid; gap: 6px; margin-top: 8px; } .pics img { width: 100%; border-radius: 10px; display: block; }
+  .pics a.dl { font-size: 12px; color: var(--accent-2); }
   /* connect tab */
   .cgroup { margin: 22px 0 8px; }
   .crow { display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -208,6 +212,7 @@
           <button class="mic" id="mic" aria-label="Talk">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/></svg>
           </button>
+          <label class="clip" title="Send a photo (she can edit it)" aria-label="Send a photo"><input type="file" id="photoIn" accept="image/jpeg,image/png,image/webp" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></label>
           <div class="grow"><textarea class="box" id="box" rows="1" placeholder="Message..."></textarea></div>
           <button class="send" id="send">Send</button>
         </div>
@@ -571,6 +576,7 @@ function connectLive() {
     if (ev.kind === "note") { if (tab === "notes") loadNotes(); return; }
     if (ev.kind === "confirm") { confirmCard(ev.confirm_id, ev.text); return; }
     if (ev.kind === "paired") { if (setupOpen) setupRender(); return; }
+    if (ev.kind === "images") { showPictures(ev.text, ev.images); return; }
     add(ev.role === "user" ? "me" : "her", ev.text, ev.source && ev.source !== "app" ? "via " + ev.source : "");
     if (tab === "today") loadToday();
   };
@@ -598,8 +604,30 @@ async function loadToday() {
   const gc = $("go-cal"); if (gc) gc.onclick = ev => { ev.preventDefault(); show("connect"); };
 }
 
+// ---------------- pictures + the photo paperclip ----------------
+function showPictures(text, images) {
+  const d = add("her", text || "Here's your picture.");
+  const g = document.createElement("div"); g.className = "pics";
+  g.style.gridTemplateColumns = images.length > 1 ? "1fr 1fr" : "1fr";
+  for (const src of images) { const a = document.createElement("a"); a.href = src; a.target = "_blank"; a.rel = "noopener";
+    const im = document.createElement("img"); im.src = src; im.loading = "lazy"; im.alt = "A picture she made"; a.appendChild(im); g.appendChild(a); }
+  d.appendChild(g); log.scrollTop = log.scrollHeight;
+  if (galaxy) galSaid(undefined, text);
+}
+$("photoIn").onchange = async () => {
+  const f = $("photoIn").files[0]; if (!f) return; $("photoIn").value = "";
+  if (f.size > 20e6) { note("That photo is too big (over 20 MB)."); return; }
+  const d = add("me", "[photo]"); const im = document.createElement("img"); im.src = URL.createObjectURL(f);
+  im.style.cssText = "width:100%;max-width:260px;border-radius:10px;display:block;margin-top:6px"; d.appendChild(im);
+  const r = await fetch("/api/photo", { method: "POST", headers: { "X-Jenna-Token": TOKEN, "X-Client-Id": CLIENT }, body: f });
+  const j = await r.json().catch(() => ({}));
+  if (j.error) { note(j.error); return; }
+  note("Photo sent. Tell her what to change, like \"make the sky a sunset\".");
+  box.focus();
+};
+
 // ---------------- connect ----------------
-const STATUS_TAG = { advanced: '<span class="tagp adv">Advanced setup</span>', paid: '<span class="tagp paid">Paid by you</span>', addon: '<span class="tagp adv">Separate free app</span>' };
+const STATUS_TAG = { advanced: '<span class="tagp adv">Advanced setup</span>', paid: '<span class="tagp paid">Paid by you</span>' };
 const mdLinks = s => esc(s).replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
 let connData = null;
 async function loadConnections(openId) {
@@ -613,7 +641,7 @@ async function loadConnections(openId) {
   for (const g of groups) {
     h += `<h3 class="cgroup">${esc(g)}</h3>`;
     for (const p of connData.filter(p => (p.status === "later" ? "Coming later" : p.group) === g)) {
-      const tags = (p.connected ? '<span class="tagp on">Connected</span>' : STATUS_TAG[p.status] || "") + (p.beta && p.status !== "later" ? '<span class="tagp">Beta</span>' : "");
+      const tags = (p.connected ? '<span class="tagp on">Connected</span>' : p.addon ? '<span class="tagp adv">Free add-on app</span>' : STATUS_TAG[p.status] || "") + (p.beta && p.status !== "later" ? '<span class="tagp">Beta</span>' : "");
       h += `<button class="crow ${p.status === "later" ? "later" : ""}" data-c="${esc(p.id)}"><span class="mono" style="background:${esc(p.color)}">${esc(p.name.slice(0, 1))}</span>
         <span class="ct"><b>${esc(p.name)}${tags}</b><span>${esc(p.connected && p.account ? p.account : p.does)}</span></span><span class="muted">${p.status === "later" ? "" : "&rsaquo;"}</span></button>`;
     }
@@ -649,6 +677,7 @@ function connDetail(id) {
     $("c-try").onclick = () => { show("chat"); box.value = "/imageprompt "; box.focus(); };
     return;
   }
+  if (p.links) h += `<div style="margin:6px 0 4px">${p.links.map(l => `<a class="nbtn primary" style="display:inline-block;text-decoration:none" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join(" ")}</div>`;
   h += `<h3>How to connect</h3><ol class="csteps">${p.steps.map(s => `<li>${mdLinks(s)}</li>`).join("")}</ol>`;
   if (p.copy) h += `<div class="small muted">Manifest to paste:</div><pre class="copy" id="c-copytext">${esc(p.copy)}</pre><button class="nbtn" id="c-copy">Copy manifest</button>`;
   h += `<div class="form card" style="margin-top:14px">${p.fields.map(f => `<label for="cf-${esc(f.key)}">${esc(f.label)}${f.optional ? ' <span class="muted">(optional)</span>' : ""}</label>
@@ -667,7 +696,7 @@ function connDetail(id) {
 const EXAMPLES = { email: '"anything important in my email?" or "reply to Sam\'s email and say Thursday works"',
   calendar: '"what\'s on my calendar tomorrow?" - and your appointments now show on the Today tab',
   social: '"write a post about our fall sale and put it on Facebook"', notion: '"what did I write in Notion about the garden?"',
-  slack: '"post in #general that the meeting moved to 3"' };
+  slack: '"post in #general that the meeting moved to 3"', pictures: '"make a flyer for my bake sale Saturday" - or send a photo with the paperclip and say what to change' };
 
 // ---------------- notes ----------------
 async function loadNotes() {

@@ -19,7 +19,7 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from . import live, memory, pc_features, voice
 from .settings import APP_PORT, DATA, ROOT, busy, load_config
@@ -423,6 +423,15 @@ class Handler(BaseHTTPRequestHandler):
             if name not in GALAXY_FILES:
                 return self._json(404, {"error": "not found"})
             return self._send_file(ROOT / "pc" / "galaxy" / name, GALAXY_FILES[name])
+        if u.path.startswith("/api/pictures/"):   # pictures she made (loaded by <img>: key in the cookie)
+            if not self._query_authed(parse_qs(u.query)):
+                return self._json(403, {"error": "forbidden"})
+            from . import conn_comfy
+            name = Path(unquote(u.path.rsplit("/", 1)[-1])).name
+            p = conn_comfy.pictures_dir() / name
+            if p.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp") or not p.is_file():
+                return self._json(404, {"error": "not found"})
+            return self._send_file(p, {"png": "image/png", "webp": "image/webp"}.get(p.suffix.lower()[1:], "image/jpeg"))
         if u.path in ("/sw.js", "/api/events", "/api/voices/preview", "/manifest.json", "/icon.png"):
             q = parse_qs(u.query)   # loaded by the browser itself (no custom headers) -> key in ?t= or the cookie
             if not self._query_authed(q):
@@ -580,6 +589,18 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, {"heard": heard, "note": n, "messages": []})
                 return self._json(200, {"heard": heard, "messages": handle_message(heard, from_voice=True, speak=speak,
                                                                                    origin=self._origin_id())})
+            if u.path == "/api/photo":   # the paperclip in the chat: keep it as "the last photo" she can edit
+                body = self._body()
+                kind = {b"\xff\xd8": ".jpg", b"\x89P": ".png", b"RI": ".webp"}.get(body[:2])
+                if not kind or len(body) < 200:
+                    return self._json(400, {"error": "That isn't a JPG, PNG or WebP picture."})
+                media = DATA / "media"
+                media.mkdir(parents=True, exist_ok=True)
+                p = media / f"photo_{time.strftime('%Y%m%d_%H%M%S')}{kind}"
+                p.write_bytes(body)
+                memory.set_state(last_photo=str(p))
+                live.publish("user", "[photo]", "app", origin=self._origin_id())
+                return self._json(200, {"saved": p.name})
             if u.path == "/api/confirm":
                 d = json.loads(self._body() or b"{}")
                 return self._json(200, {"messages": handle_confirm(str(d.get("id", "")), bool(d.get("yes")),

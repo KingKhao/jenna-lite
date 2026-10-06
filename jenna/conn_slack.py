@@ -9,6 +9,7 @@ import re
 import secrets
 import threading
 import time
+from pathlib import Path
 
 from . import connections, live, memory
 
@@ -69,6 +70,8 @@ def _handle(client, req):
         return
     if user != saved["owner"] or not text:
         return
+    if saved.get("dm_channel") != channel:
+        connections.update_saved("slack", dm_channel=channel)   # where finished pictures go
     bot = _state["bot"]
     if not bot:
         return
@@ -120,6 +123,17 @@ def restart():
             c.close()
         except Exception as e:
             log.debug("slack close: %r", e)
+
+
+def send_files(paths, text):
+    """Finished pictures into the Slack DM with the owner (if Slack is connected and they've messaged her there)."""
+    s, saved = connections.secrets("slack"), connections.saved("slack") or {}
+    if not s.get("bot_token") or not saved.get("dm_channel"):
+        return
+    from slack_sdk import WebClient
+    WebClient(token=s["bot_token"], timeout=120).files_upload_v2(
+        channel=saved["dm_channel"], initial_comment=text,
+        file_uploads=[{"file": str(p), "filename": Path(p).name} for p in paths])
 
 
 def post(channel, text):

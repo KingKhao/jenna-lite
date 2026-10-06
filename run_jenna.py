@@ -71,7 +71,8 @@ def worker():
     threading.Thread(target=pc_api.serve, args=(bot,), name="pc-app", daemon=True).start()
     wait_for_ollama(log)
     threading.Thread(target=scheduler.run_forever, args=(bot,), name="scheduler", daemon=True).start()
-    from jenna import conn_slack
+    from jenna import conn_comfy, conn_slack
+    conn_comfy.BOT = bot   # finished pictures go to the app, Telegram and Slack
     threading.Thread(target=conn_slack.run, args=(bot,), name="slack", daemon=True).start()   # idles until Slack is connected
     try:
         from jenna import pc_ptt

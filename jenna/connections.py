@@ -157,17 +157,21 @@ PROVIDERS = [
      "fields": [{"key": "api_key", "label": "API Key", "secret": True}, {"key": "api_secret", "label": "API Key Secret", "secret": True},
                 {"key": "access_token", "label": "Access Token", "secret": True}, {"key": "access_secret", "label": "Access Token Secret", "secret": True}]},
     # ---------------- add-ons (separate free apps the user installs) ----------------
-    {"id": "image_video", "group": "Add-ons", "name": "Image & video creation", "status": "addon", "color": "#8B5CF6",
-     "does": "Make pictures, edit photos and create short videos on your own PC, free. It's a separate app (ComfyUI) - "
-             "she can't drive it yet, but /imageprompt has her write the prompts for you.",
+    {"id": "image_video", "group": "Add-ons", "name": "Image & video creation", "status": "ready", "addon": True, "color": "#8B5CF6",
+     "kind": "pictures",
+     "does": "She makes pictures and edits your photos on your own PC, free, through ComfyUI (a separate free app you "
+             "install once). Ask her: \"make a flyer for my bake sale\" or send a photo and say what to change.",
      "links": [{"label": "Download ComfyUI Desktop (free)", "url": "https://docs.comfy.org/installation/desktop/windows"}],
      "steps": ["Download ComfyUI Desktop for Windows (NVIDIA) from [docs.comfy.org](https://docs.comfy.org/installation/desktop/windows) and install it like any app. It needs an NVIDIA graphics card; each model is a few GB.",
                "Open ComfyUI, click Workflow > Browse Templates. It offers to download the model files a template needs - say yes.",
-               "Pictures: pick the Z-Image Turbo text-to-image template ('Text to Image'). It's fast (8 steps) and can put readable text on images.",
-               "Photo editing: pick a FLUX.2 [klein] template to change a photo with words ('swap the background for a beach at sunset'). It wants a card with about 13 GB of memory.",
+               "Pictures: open the Z-Image Turbo text-to-image template ('Text to Image') once so it downloads the model. It's fast (8 steps) and can put readable text on images.",
+               "Photo editing: open the FLUX.2 [klein] image-edit template once too, so she can change your photos with words ('swap the background for a beach at sunset').",
                "Video: open the Video templates and pick Wan 2.2 5B (text or picture to video) - it runs on cards with 8 GB.",
                "Ask her for a prompt first: type /imageprompt and describe what you want. Paste her prompt into ComfyUI's text box.",
-               "Tip: she and ComfyUI share your graphics card. If ComfyUI runs out of memory, close Ollama from the icon by the clock while you create, then open it again."]},
+               "Tip: she and ComfyUI share your graphics card - she hands it over automatically for each picture, so her next reply takes a few seconds longer.",
+               "Leave ComfyUI open, then press Test & connect below (it finds ComfyUI by itself). Video from chat is coming next; for now make videos in ComfyUI."],
+     "fields": [{"key": "url", "label": "ComfyUI address (leave empty to find it)", "optional": True,
+                 "placeholder": "auto"}]},
     {"id": "tiktok", "group": "Social media", "name": "TikTok", "status": "later", "color": "#010101",
      "does": "Until an app passes TikTok's 2-4 week audit, every post it makes is forced to private. Coming once Jenna Lite is approved."},
     {"id": "linkedin", "group": "Social media", "name": "LinkedIn", "status": "later", "color": "#0A66C2",
@@ -200,7 +204,8 @@ def connected(pid):
         return bool(get_secret("telegram_token")) and bool(load_config().get("telegram_user_id"))
     if p.get("special") == "phone":
         return bool(load_config().get("pc_remote_hosts"))
-    return bool(saved(pid)) and bool(secrets(pid))
+    needs_secret = any(f.get("secret") for f in p.get("fields", []))
+    return bool(saved(pid)) and (bool(secrets(pid)) or not needs_secret)
 
 
 def connected_ids(kind=None):
@@ -296,6 +301,9 @@ def _test(pid, f):
     if kind == "social":
         from . import conn_social
         return conn_social.test(pid, f)
+    if kind == "pictures":
+        from . import conn_comfy
+        return conn_comfy.test(f)
     raise ValueError("unknown connection")
 
 
@@ -337,6 +345,15 @@ def tool_schemas():
     if connected("slack"):
         out.append(_fn("slack_post", "Post a message to a Slack channel the app was added to (e.g. #general). The user confirms first.",
                        {"channel": S, "text": S}, ["channel", "text"]))
+    if connected("image_video"):
+        out += [_fn("make_image", "Make a picture with ComfyUI on the user's PC (the user confirms first). Write the prompt "
+                    "yourself: 40-80 words - subject, setting, style, colors, lighting; exact words for any text in double "
+                    "quotes. It runs in the background (about a minute) and appears in the chat when done.",
+                    {"prompt": S, "aspect": {"type": "string", "enum": ["square", "portrait", "landscape"]},
+                     "count": {"type": "integer", "description": "1-4 (default 1)"}}, ["prompt"]),
+                _fn("edit_photo", "Edit the last photo the user sent (paperclip in the app, or a photo on Telegram) from a "
+                    "plain instruction like 'replace the background with a beach at sunset'. The user confirms first.",
+                    {"instruction": S}, ["instruction"])]
     social = [i for i in SOCIAL if connected(i)]
     if social:
         plat = {"type": "string", "enum": social}
@@ -348,7 +365,7 @@ def tool_schemas():
     return out
 
 
-CONFIRM = {"email_send", "notion_append", "slack_post", "social_post"}
+CONFIRM = {"email_send", "notion_append", "slack_post", "social_post", "make_image", "edit_photo"}
 UNTRUSTED = {"email_inbox": "email", "email_search": "email", "email_read": "email", "notion_search": "notion",
              "notion_read": "notion", "social_recent": "social media"}
 
@@ -360,6 +377,12 @@ def confirm_summary(name, a):
         return f"Add this to the Notion page?\n\n{str(a.get('text', ''))[:700]}"
     if name == "slack_post":
         return f"Post this in Slack {a.get('channel')}?\n\n{str(a.get('text', ''))[:700]}"
+    if name == "make_image":
+        n = max(1, min(int(a.get("count") or 1), 4))
+        return (f"Make {'this picture' if n == 1 else f'{n} pictures'} ({a.get('aspect') or 'square'})?\n\n{str(a.get('prompt', ''))[:700]}"
+                "\n\nShe hands the graphics card to ComfyUI for about a minute.")
+    if name == "edit_photo":
+        return f"Edit your last photo like this?\n\n{str(a.get('instruction', ''))[:500]}"
     if name == "social_post":
         plat = BY_ID.get(a.get("platform"), {}).get("name", a.get("platform"))
         cost = "\n\n(X charges about 1.5 cents for this post, about 20 cents if it has a link.)" if a.get("platform") == "x" else ""
@@ -381,4 +404,12 @@ def execute(name, a):
     if name.startswith("social_"):
         from . import conn_social
         return conn_social.execute(name, a)
+    if name in ("make_image", "edit_photo"):
+        from . import conn_comfy
+        try:
+            if name == "make_image":
+                return conn_comfy.start_picture(a.get("prompt", ""), a.get("aspect") or "square", a.get("count") or 1)
+            return conn_comfy.start_edit(a.get("instruction", ""))
+        except Exception as e:
+            return f"Couldn't reach ComfyUI ({type(e).__name__}) - is it open?"
     return f"There's no tool called {name}."

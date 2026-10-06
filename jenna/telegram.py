@@ -173,6 +173,30 @@ class Bot:
             if ogg:
                 Path(ogg).unlink(missing_ok=True)
 
+    def send_photo(self, path, caption=""):
+        """A finished picture to Telegram (falls back to a document for very large files)."""
+        if not self.enabled or not self.owner:
+            return
+        with open(path, "rb") as fh:
+            r = requests.post(API.format(token=self.token, method="sendPhoto"), timeout=120,
+                              data={"chat_id": self.owner, **({"caption": caption[:1000]} if caption else {})},
+                              files={"photo": (Path(path).name, fh)}).json()
+        if not r.get("ok"):
+            with open(path, "rb") as fh:
+                requests.post(API.format(token=self.token, method="sendDocument"), timeout=180,
+                              data={"chat_id": self.owner}, files={"document": (Path(path).name, fh)})
+
+    def save_photo(self, file_id):
+        """Keep the user's latest photo so she can edit it (edit_photo)."""
+        from .settings import DATA
+        info = self.api("getFile", file_id=file_id)
+        media = DATA / "media"
+        media.mkdir(parents=True, exist_ok=True)
+        path = media / f"photo_{time.strftime('%Y%m%d_%H%M%S')}{Path(info['file_path']).suffix or '.jpg'}"
+        path.write_bytes(requests.get(f"https://api.telegram.org/file/bot{self.token}/{info['file_path']}", timeout=60).content)
+        memory.set_state(last_photo=str(path))
+        return path
+
     def reply(self, text, from_voice=False):
         if memory.get_state().get("voice_next_reply"):   # she chose to answer out loud (reply_with_voice)
             memory.set_state(voice_next_reply=False)
@@ -370,6 +394,13 @@ class Bot:
                 live.publish("user", text, "telegram voice")
                 self.send(f'(heard: "{text}")', quiet=True)
                 return self.handle_text(text, from_voice=True)
+            if msg.get("photo"):
+                best = max(msg["photo"], key=lambda p: p.get("file_size", 0))
+                self.save_photo(best["file_id"])
+                caption = (msg.get("caption") or "").strip()
+                live.publish("user", "[photo] " + caption, "telegram")
+                return self.handle_text((caption or "I sent you a photo.") + " [They just sent a photo (saved). To change "
+                                        "it, use edit_photo with their instruction.]")
             if msg.get("text"):
                 live.publish("user", msg["text"], "telegram")
                 return self.handle_text(msg["text"])

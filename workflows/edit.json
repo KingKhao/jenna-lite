@@ -1,0 +1,234 @@
+{
+  "about": "FLUX.2 klein 4B (distilled, FP8) single-photo edit, rebuilt in ComfyUI API format from the official template image_flux2_klein_image_edit_4b_distilled (4 steps, euler).",
+  "models": [
+    {
+      "file": "flux-2-klein-4b-fp8.safetensors",
+      "folder": "diffusion_models",
+      "template": "Flux.2 Klein 4B Image Edit (Distilled)"
+    },
+    {
+      "file": "qwen_3_4b.safetensors",
+      "folder": "text_encoders",
+      "template": "Flux.2 Klein 4B Image Edit (Distilled)"
+    },
+    {
+      "file": "flux2-vae.safetensors",
+      "folder": "vae",
+      "template": "Flux.2 Klein 4B Image Edit (Distilled)"
+    }
+  ],
+  "workflow": {
+    "70": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "flux-2-klein-4b-fp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "71": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "type": "flux2",
+        "device": "default"
+      }
+    },
+    "72": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "flux2-vae.safetensors"
+      }
+    },
+    "76": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{{IMAGE}}"
+      }
+    },
+    "80": {
+      "class_type": "ImageScaleToTotalPixels",
+      "inputs": {
+        "image": [
+          "76",
+          0
+        ],
+        "upscale_method": "nearest-exact",
+        "megapixels": 1,
+        "resolution_steps": 1
+      }
+    },
+    "99": {
+      "class_type": "GetImageSize",
+      "inputs": {
+        "image": [
+          "80",
+          0
+        ]
+      }
+    },
+    "74": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "{{PROMPT}}",
+        "clip": [
+          "71",
+          0
+        ]
+      }
+    },
+    "82": {
+      "class_type": "ConditioningZeroOut",
+      "inputs": {
+        "conditioning": [
+          "74",
+          0
+        ]
+      }
+    },
+    "122": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "80",
+          0
+        ],
+        "vae": [
+          "72",
+          0
+        ]
+      }
+    },
+    "123": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "74",
+          0
+        ],
+        "latent": [
+          "122",
+          0
+        ]
+      }
+    },
+    "121": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "82",
+          0
+        ],
+        "latent": [
+          "122",
+          0
+        ]
+      }
+    },
+    "63": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "70",
+          0
+        ],
+        "positive": [
+          "123",
+          0
+        ],
+        "negative": [
+          "121",
+          0
+        ],
+        "cfg": 1
+      }
+    },
+    "73": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": "{{SEED}}"
+      }
+    },
+    "61": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "62": {
+      "class_type": "Flux2Scheduler",
+      "inputs": {
+        "steps": 4,
+        "width": [
+          "99",
+          0
+        ],
+        "height": [
+          "99",
+          1
+        ]
+      }
+    },
+    "66": {
+      "class_type": "EmptyFlux2LatentImage",
+      "inputs": {
+        "width": [
+          "99",
+          0
+        ],
+        "height": [
+          "99",
+          1
+        ],
+        "batch_size": 1
+      }
+    },
+    "64": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "73",
+          0
+        ],
+        "guider": [
+          "63",
+          0
+        ],
+        "sampler": [
+          "61",
+          0
+        ],
+        "sigmas": [
+          "62",
+          0
+        ],
+        "latent_image": [
+          "66",
+          0
+        ]
+      }
+    },
+    "65": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "64",
+          0
+        ],
+        "vae": [
+          "72",
+          0
+        ]
+      }
+    },
+    "9": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "65",
+          0
+        ],
+        "filename_prefix": "jenna-lite/edit"
+      }
+    }
+  }
+}

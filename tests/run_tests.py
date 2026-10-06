@@ -340,11 +340,11 @@ def connections_overview_and_validation():
         assert want in ids, want
     assert all(p["status"] == "later" or p.get("special") or p.get("steps") for p in d), "every connectable card has steps"
     addon = next(p for p in d if p["id"] == "image_video")
-    assert addon["status"] == "addon" and addon["links"][0]["url"].startswith("https://docs.comfy.org/")
+    assert addon.get("addon") and addon["links"][0]["url"].startswith("https://docs.comfy.org/")
     for pid, fields, words in [("gmail", {"address": "not-an-email", "password": "x"}, "email address"),
                                ("notion", {"token": "abc"}, "ntn_"), ("slack", {"bot_token": "xapp-1", "app_token": "xoxb-1"}, "xoxb"),
                                ("gmail", {"address": ""}, "Fill in"), ("tiktok", {}, "can't be connected"),
-                               ("image_video", {}, "can't be connected")]:
+                               ("image_video", {"url": "http://127.0.0.1:59"}, "isn't running")]:
         try:
             connections.connect(pid, fields)
             raise AssertionError(f"{pid} should have been refused")
@@ -446,6 +446,134 @@ def notion_accepts_links_and_ids():
     conn_notion.read("https://www.notion.so/Garden-plan-0123456789abcdef0123456789abcdef")
     assert seen[0] == "/pages/0123456789abcdef0123456789abcdef", seen
     assert conn_notion.read("not a page").startswith("Use a page id")
+
+
+# ---------------- pictures through ComfyUI (a fake ComfyUI server: no GPU needed) ----------------
+class FakeComfy:
+    """Enough of ComfyUI's API: /system_stats, /models/<folder>, /upload/image, /prompt, /history/<id>, /view, /free."""
+    def __init__(self, models):
+        import io
+        import struct
+        import zlib
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        png_row = b"\x00" + b"\xff\x88\x00" * 4
+        raw = zlib.compress(png_row * 4)
+        chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+        self.png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0)) + chunk(b"IDAT", raw) + chunk(b"IEND", b"")
+        self.models, self.prompts, self.freed, self.uploads = models, [], 0, []
+        fake = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+
+            def _send(self, code, body, ctype="application/json"):
+                data = body if isinstance(body, bytes) else json.dumps(body).encode()
+                self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(data)))
+                self.end_headers(); self.wfile.write(data)
+
+            def do_GET(self):
+                if self.path == "/system_stats":
+                    return self._send(200, {"system": {"comfyui_version": "test"}, "devices": [{"name": "cuda:0 Fake GPU : cudaMallocAsync"}]})
+                if self.path.startswith("/models/"):
+                    return self._send(200, fake.models.get(self.path.split("/")[2], []))
+                if self.path.startswith("/history/"):
+                    pid = self.path.split("/")[2]
+                    return self._send(200, {pid: {"status": {"status_str": "success"},
+                                                  "outputs": {"9": {"images": [{"filename": f"jenna-lite_{pid}.png", "subfolder": "jenna-lite", "type": "output"}]}}}})
+                if self.path.startswith("/view"):
+                    return self._send(200, fake.png, "image/png")
+                return self._send(404, {})
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                if self.path == "/prompt":
+                    wf = json.loads(body)["prompt"]
+                    fake.prompts.append(wf)
+                    return self._send(200, {"prompt_id": f"p{len(fake.prompts)}", "number": len(fake.prompts)})
+                if self.path == "/upload/image":
+                    fake.uploads.append(len(body))
+                    return self._send(200, {"name": "jl_upload.png", "subfolder": "", "type": "input"})
+                if self.path == "/free":
+                    fake.freed += 1
+                    return self._send(200, {})
+                return self._send(404, {})
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+
+ALL_MODELS = {"diffusion_models": ["z_image_turbo_bf16.safetensors", "flux-2-klein-4b-fp8.safetensors"],
+              "text_encoders": ["qwen_3_4b.safetensors"], "vae": ["ae.safetensors", "flux2-vae.safetensors"]}
+
+
+def _wait_job(conn_comfy, timeout=20):
+    import time as _t
+    t0 = _t.time()
+    while conn_comfy._job["running"] and _t.time() - t0 < timeout:
+        _t.sleep(0.1)
+    assert not conn_comfy._job["running"], "picture job never finished"
+
+
+@test
+def pictures_connect_make_and_edit_with_comfyui():
+    from jenna import conn_comfy, connections
+    fake = FakeComfy({"diffusion_models": [], "text_encoders": [], "vae": []})
+    try:
+        connections.connect("image_video", {"url": fake.url})
+        raise AssertionError("should refuse while the model isn't downloaded")
+    except ValueError as e:
+        assert "Z-Image Turbo" in str(e), str(e)
+    fake.models = ALL_MODELS
+    connections.connect("image_video", {"url": fake.url})
+    names = {s["function"]["name"] for s in tools.schemas()}
+    assert {"make_image", "edit_photo"} <= names
+    conn_comfy.pictures_dir = lambda: (TMP / "Pictures").mkdir(exist_ok=True) or TMP / "Pictures"
+    sent = []
+    conn_comfy.BOT = SimpleNamespace(enabled=False, owner=None, send=lambda t, **k: sent.append(t))
+
+    out, pending = tools.call("make_image", {"prompt": "A cozy farm stand at sunrise with pumpkins, a chalkboard sign "
+                                             "that says \"Fresh Eggs\", warm light, photo style", "aspect": "landscape"})
+    assert pending and "Make this picture (landscape)" in pending["summary"], "pictures ask Yes first"
+    out, _ = tools.call("make_image", {"prompt": pending["summary"].split("\n\n")[1], "aspect": "landscape"}, allow_risky=True)
+    assert out.startswith("Started"), out
+    _wait_job(conn_comfy)
+    wf = fake.prompts[-1]
+    assert wf["27"]["inputs"]["text"].startswith("A cozy farm stand") and wf["13"]["inputs"]["width"] == 1216
+    assert isinstance(wf["3"]["inputs"]["seed"], int) and wf["28"]["inputs"]["unet_name"] == "z_image_turbo_bf16.safetensors"
+    saved = list((TMP / "Pictures").glob("*.png"))
+    assert saved and saved[0].read_bytes()[1:4] == b"PNG", saved
+    assert fake.freed >= 1, "ComfyUI is told to free the graphics card afterwards"
+    assert any("Here's your picture" in m["content"] for m in memory.display_history(5))
+
+    assert tools.call("edit_photo", {"instruction": "make the sky a sunset"}, allow_risky=True)[0].startswith("There's no photo")
+    photo = TMP / "photo.png"
+    photo.write_bytes(fake.png)
+    memory.set_state(last_photo=str(photo))
+    out, _ = tools.call("edit_photo", {"instruction": "make the sky a sunset"}, allow_risky=True)
+    assert out.startswith("Started editing"), out
+    _wait_job(conn_comfy)
+    ewf = fake.prompts[-1]
+    assert ewf["76"]["inputs"]["image"] == "jl_upload.png" and ewf["74"]["inputs"]["text"] == "make the sky a sunset" and fake.uploads
+
+    assert "PG-13" in conn_comfy.check("a nude portrait of a woman on a beach at night")
+    assert "hard no" in conn_comfy.check("a sexy photo of a teen girl in a bikini on the beach")
+    assert conn_comfy.check("a cat").startswith("PROMPT TOO SHORT")
+    connections.disconnect("image_video")
+    assert "make_image" not in {s["function"]["name"] for s in tools.schemas()}
+
+
+@test
+def workflow_files_are_valid_api_format():
+    import json as _j
+    for name in ("picture", "edit"):
+        m = _j.loads((ROOT / "workflows" / f"{name}.json").read_text(encoding="utf-8"))
+        wf = m["workflow"]
+        assert m["models"] and all(n.get("class_type") and isinstance(n.get("inputs"), dict) for n in wf.values())
+        for nid, node in wf.items():   # every link points at a node that exists
+            for v in node["inputs"].values():
+                if isinstance(v, list) and len(v) == 2 and isinstance(v[1], int):
+                    assert v[0] in wf, (name, nid, v)
+        assert any(n["class_type"] == "SaveImage" for n in wf.values())
 
 
 @test
