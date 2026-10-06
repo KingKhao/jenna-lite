@@ -1,0 +1,15 @@
+# her private/runtime data never leaves the PC
+data/
+config.json
+voices/
+.venv/
+__pycache__/
+*.pyc
+*.log
+*.pem
+pc_token.txt
+.env
+dist/
+
+# words the personal-details test looks for (kept off GitHub on purpose)
+tests/.personal-words

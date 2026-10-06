@@ -1,0 +1,29 @@
+/* Galaxy UI design tokens - every colour for the galaxy's controls lives here, dark and light sets. */
+:root, [data-theme="dark"] {
+  --g-bg: #02040b;
+  --g-text: #e6eef5;
+  --g-muted: #8fa0b3;
+  --g-panel: rgba(12, 20, 32, 0.72);
+  --g-line: rgba(140, 170, 200, 0.22);
+  --g-accent: #29b885;
+  --g-on: #f2c14e;
+  --g-bad: #ef5350;
+}
+[data-theme="light"] {
+  --g-bg: #eef2f8;
+  --g-text: #14202c;
+  --g-muted: #56677a;
+  --g-panel: rgba(255, 255, 255, 0.78);
+  --g-line: rgba(40, 60, 90, 0.18);
+  --g-accent: #138a62;
+  --g-on: #b7791f;
+  --g-bad: #c62828;
+}
+.galaxy-host { position: relative; overflow: hidden; background: var(--g-bg); color: var(--g-text); }
+.galaxy-canvas { position: absolute; inset: 0; display: block; }
+.g-theme { position: absolute; top: 12px; right: 12px; display: flex; border: 1px solid var(--g-line); border-radius: 999px;
+  background: var(--g-panel); padding: 3px; gap: 2px; z-index: 2; }
+.g-theme button { border: 0; background: transparent; color: var(--g-muted); width: 34px; height: 30px; border-radius: 999px;
+  display: grid; place-items: center; cursor: pointer; }
+.g-theme button[aria-pressed="true"] { background: var(--g-accent); color: var(--g-bg); }
+.g-theme svg { width: 16px; height: 16px; }

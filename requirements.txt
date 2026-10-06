@@ -1,0 +1,23 @@
+# Jenna Lite's Python packages (Python 3.11 or 3.12). The installer runs: pip install -r requirements.txt
+cryptography==50.0.1          # phone push notifications (keys)
+ddgs==9.16.0                  # web search
+faster-whisper==1.2.1         # speech to text (runs on the CPU)
+av==18.0.0                    # audio decoding for faster-whisper (19.x dropped an argument it uses)
+keyboard==0.13.5              # F9 push-to-talk
+keyring==25.7.0               # the Telegram token in Windows Credential Manager
+kokoro-onnx==0.6.1            # her voice
+numpy==2.4.6
+ollama==0.6.2                 # the local AI model
+playwright==1.63.0            # reading JavaScript-heavy web pages
+py-vapid==1.9.4
+pywebpush==2.5.0              # phone push notifications
+qrcode>=8.0,<9                # the phone-setup QR code
+requests==2.34.2
+sounddevice==0.5.5
+soundfile==0.14.0             # microphone / audio files
+trafilatura==2.2.0            # web page text extraction
+icalendar==7.3.0              # connected calendars (iCal links)
+recurring-ical-events==3.8.2  # repeating calendar events
+caldav==3.3.1                 # Apple iCloud Calendar
+slack_sdk==3.45.0             # Slack (Socket Mode)
+requests-oauthlib==2.0.0      # X (Twitter) sign-in
