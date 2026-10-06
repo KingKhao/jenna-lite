@@ -170,7 +170,7 @@ PROVIDERS = [
                "Then just ask her: \"make a picture of...\" (she writes the detailed prompt), or send a photo with the paperclip and say what to change. Pictures are saved in Pictures/Jenna Lite.",
                "Tip: new pictures handle lettering well (signs, flyers); photo edits are less reliable with words - for text, ask for a new picture instead.",
                "Tip: she and ComfyUI share your graphics card - she hands it over automatically for each picture, so her next reply takes a few seconds longer.",
-               "For videos, open the Wan 2.2 5B video template once too, so it downloads the video model (about 18 GB).",
+               "For videos, open the Wan 2.2 5B video template once too, so it downloads the video model (about 18 GB). A 3-second clip takes about 10 minutes on a mid-range card.",
                "Leave ComfyUI open, then press Test & connect below (it finds ComfyUI by itself)."],
      "fields": [{"key": "url", "label": "ComfyUI address (leave empty to find it)", "optional": True,
                  "placeholder": "auto"}]},

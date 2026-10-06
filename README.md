@@ -33,7 +33,8 @@ Made by [Clinch Valley Digital](https://clinchvalleydigital.com). Built with ide
   - **Pictures and photo edits** (free add-on): install the free ComfyUI app once (the Connect card walks you through it) and she
     makes pictures from a chat message (Z-Image Turbo - good with lettering, about a minute each) and edits photos you send
     with the paperclip or on Telegram (FLUX.2 klein). You approve each one first; they're saved in Pictures/Jenna Lite.
-    Video: make it in ComfyUI itself for now (Wan 2.2 template).
+    **Videos too:** "make a short video of..." or "bring my photo to life" (Wan 2.2 5B, 2-5 seconds, 1280x704). Expect about
+    10 minutes for a 3-second clip on an RTX 3060; it's saved in Videos/Jenna Lite and shows up in the chat when done.
   - Coming later (they need approved apps first): Outlook/Microsoft 365 email, Google Workspace email, TikTok, LinkedIn, YouTube, Pinterest.
 - **Appointments.** Tell her "dentist Thursday at 2" and it's on the Today tab with a reminder 30 minutes before.
 - **Your personality.** Pick a starting personality (warm friend, sharp professional, hype coach or calm
