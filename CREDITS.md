@@ -4,7 +4,7 @@ Jenna Lite is made by [Clinch Valley Digital](https://clinchvalleydigital.com) a
 
 ## Ideas and prompts
 
-Several of her features grew out of prompts and ideas from [**hellotrillion.ai**](https://hellotrillion.ai): the
+Several of her features grew out of free prompts and ideas from [**Trillion**](https://hellotrillion.ai) by Kevin Fremon (Lightbulb Moment Labs): the
 cosmic home-screen interface, cutting voice latency (speaking her first sentence while she's still writing),
 knowing when a conversation is over, the voice-first phone app, prompt caching, and the desktop app wrapper.
 Thank you.
