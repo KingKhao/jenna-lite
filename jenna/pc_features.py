@@ -169,12 +169,24 @@ def delete_skill(ref):
 
 ORBIT = ["decide", "plan", "email", "brainstorm", "meal", "goal", "summarize", "reply", "humanize"]   # the showcase
 
+# isekai skill-card tiers (2026-10-19): D=white, C=green, B=blue, A=purple, S=gold.
+# Each card's border, glow and rank letter follow its rank. Edit this map to re-rank a skill.
+RANK = {
+    "S": ["email", "plan", "decide"],
+    "A": ["goal", "budget", "trip", "brainstorm"],
+    "B": ["week", "story", "social", "reply", "summarize", "explain-doc", "imageprompt"],
+    "C": ["todo", "meal", "recipe", "gift", "names", "text", "tone"],
+    "D": ["bullets", "shorter", "simplify", "humanize", "proofread"],
+}
+RANK_OF = {sid: r for r, ids in RANK.items() for sid in ids}
+
 
 def constellation():
     """Home screen: nine of her skills orbit the orb as little helpers - the showcase set first, then the user's own."""
     skills = list_skills()
     picked = sorted(skills, key=lambda s: ORBIT.index(s["id"]) if s["id"] in ORBIT else len(ORBIT))[:9]
-    return {"agents": [{"id": s["id"], "name": s["name"], "specialty": s["description"]} for s in picked], "working": []}
+    return {"agents": [{"id": s["id"], "name": s["name"], "specialty": s["description"],
+                        "rank": RANK_OF.get(s["id"], "C")} for s in picked], "working": []}
 
 
 # ============================== History ==============================
