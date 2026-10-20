@@ -180,13 +180,20 @@ RANK = {
 }
 RANK_OF = {sid: r for r, ids in RANK.items() for sid in ids}
 
+WORKING = set()   # skill ids running right now (brain.apply_skill keeps this current) - drives the card spotlight
+
+
+def working():
+    """Ids of the skills running at this moment - the home screen polls this for the spotlight."""
+    return sorted(WORKING)
+
 
 def constellation():
     """Home screen: nine of her skills orbit the orb as little helpers - the showcase set first, then the user's own."""
     skills = list_skills()
     picked = sorted(skills, key=lambda s: ORBIT.index(s["id"]) if s["id"] in ORBIT else len(ORBIT))[:9]
     return {"agents": [{"id": s["id"], "name": s["name"], "specialty": s["description"],
-                        "rank": RANK_OF.get(s["id"], "C")} for s in picked], "working": []}
+                        "rank": RANK_OF.get(s["id"], "C")} for s in picked], "working": working()}
 
 
 # ============================== History ==============================
