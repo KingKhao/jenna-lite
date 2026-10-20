@@ -5,6 +5,10 @@
 import * as THREE from "/galaxy/three.module.min.js";
 
 const PALETTE = ["#29B885", "#38BDF8", "#A78BFA", "#E88FB3", "#5EEAD4", "#818CF8", "#F0ABFC", "#34D399", "#60A5FA"];
+// isekai skill-card ranks (2026-10-19): each card's border, glow and rank letter follow its rank.
+// D=white, C=green, B=blue, A=purple, S=gold. The server sends the rank per helper; a missing rank reads as C.
+const RANK_COLORS = { S: "#F5C542", A: "#A78BFA", B: "#38BDF8", C: "#22C55E", D: "#E8EDF5" };
+const CARD_W = 128, CARD_H = 160;
 const EASE = (a, b, k, dt) => a + (b - a) * (1 - Math.pow(1 - k, dt * 60));   // the galaxy's frame-rate-independent ease
 const hash01 = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0) / 4294967296; };
 
@@ -32,6 +36,54 @@ function avatarTexture(name, color) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// rounded-rect path helper (safer than ctx.roundRect across browsers)
+function rr(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+// shrink a single-line label until it fits maxW (never below 8px)
+function fitFont(g, text, base, maxW) {
+  let size = base;
+  g.font = `600 ${size}px system-ui, sans-serif`;
+  while (g.measureText(text).width > maxW && size > 8) { size -= 1; g.font = `600 ${size}px system-ui, sans-serif`; }
+}
+
+// skill card (2026-10-19): the orb's visual language in card form. A soft halo wash in the rank color, a dark
+// card with a glowing rank-colored border, the big rank letter (D-S), and the skill name fitted below it.
+// The old circle avatar (avatarTexture, above) stays in the file as the one-line fallback.
+function cardTexture(name, rank, color) {
+  const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
+  const g = c.getContext("2d");
+  const halo = g.createRadialGradient(CARD_W / 2, CARD_H / 2, 30, CARD_W / 2, CARD_H / 2, 84);
+  halo.addColorStop(0, color + "88"); halo.addColorStop(1, color + "00");
+  g.fillStyle = halo; g.fillRect(0, 0, CARD_W, CARD_H);
+  const x = 16, y = 10, w = CARD_W - 32, h = CARD_H - 20, r = 13;
+  g.save();
+  g.shadowColor = color; g.shadowBlur = 16;
+  rr(g, x, y, w, h, r);
+  const body = g.createLinearGradient(0, y, 0, y + h);
+  body.addColorStop(0, "#111a29"); body.addColorStop(1, "#0b1018");
+  g.fillStyle = body; g.fill();
+  g.restore();
+  rr(g, x, y, w, h, r);
+  g.lineWidth = 3; g.strokeStyle = color; g.stroke();
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillStyle = color; g.font = "700 56px system-ui, sans-serif";
+  g.fillText(rank, CARD_W / 2, y + 54);
+  g.strokeStyle = color + "55"; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(x + 18, y + 90); g.lineTo(x + w - 18, y + 90); g.stroke();
+  fitFont(g, name, 15, w - 20);
+  g.fillStyle = "#ffffff";
+  g.fillText(name, CARD_W / 2, y + 116);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 export function createConstellation(galaxy, agents = []) {
   const { scene, camera, container } = galaxy.orbLayer();
   const root = new THREE.Group(); scene.add(root);
@@ -43,13 +95,14 @@ export function createConstellation(galaxy, agents = []) {
 
   function add(a, i = items.size) {
     if (items.has(a.id)) return items.get(a.id);
-    const color = a.color || PALETTE[i % PALETTE.length];
+    const rank = String(a.rank || "C").toUpperCase();
+    const color = RANK_COLORS[rank] || a.color || PALETTE[i % PALETTE.length];
     const g = new THREE.Group();
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color, transparent: true, opacity: 0.5,
       blending: THREE.AdditiveBlending, depthWrite: false }));
     halo.scale.setScalar(0.62);
-    const face = new THREE.Sprite(new THREE.SpriteMaterial({ map: avatarTexture(a.name, color), transparent: true, depthWrite: false }));
-    face.scale.setScalar(0.3);
+    const face = new THREE.Sprite(new THREE.SpriteMaterial({ map: cardTexture(a.name, rank, color), transparent: true, depthWrite: false }));
+    face.scale.set(0.3, 0.3 * (CARD_H / CARD_W), 1);   // the card is portrait: keep its aspect, don't squash it square
     g.add(halo, face); root.add(g);
     const label = document.createElement("div");
     label.style.cssText = "position:absolute;left:0;top:0;transform:translate(-50%,0);text-align:center;white-space:nowrap;" +
@@ -128,7 +181,8 @@ export function createConstellation(galaxy, agents = []) {
       const pulse = it.workGlow * (0.35 + 0.35 * (0.5 + 0.5 * Math.sin(now / 260)));
       it.halo.material.opacity = Math.min(1, breathe + pulse + it.flare * 0.6);
       it.halo.scale.setScalar(0.62 * (1 + it.flare * 0.8 + it.workGlow * 0.25));
-      it.face.scale.setScalar(0.3 * (1 + it.flare * 0.25));
+      const faceScale = 0.3 * (1 + it.flare * 0.25);
+      it.face.scale.set(faceScale, faceScale * (CARD_H / CARD_W), 1);   // flare without losing the card's aspect
       it.label.style.color = light ? "#1d2633" : "#e8edf5"; it.label.style.textShadow = light ? "0 0 6px #fff" : "0 0 6px #000";
       // label: below the avatar on screen; dim on the far side, hidden right behind the orb, stacked by depth
       v.copy(it.g.position).project(camera);
