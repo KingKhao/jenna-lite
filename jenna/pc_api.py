@@ -370,6 +370,8 @@ class Handler(BaseHTTPRequestHandler):
             return {"notes": pc_features.list_notes(min(90, int((q.get("days") or ["14"])[0])))}
         if u.path == "/api/skills":
             return {"skills": pc_features.list_skills()}
+        if u.path == "/api/constellation/working":
+            return {"working": pc_features.working()}
         if u.path == "/api/constellation":
             return pc_features.constellation()
         if u.path == "/api/search":
