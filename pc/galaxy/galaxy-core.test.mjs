@@ -90,3 +90,11 @@ test("orb displacement: barely ripples at rest, clamped when loud", () => {
   const loud = G.displacementScale({ ...G.STATES.listening, amp: 5 }, 0, { voice: 1, bass: 1 });
   assert.equal(loud, 0.45);
 });
+
+test("the home screen is plain by default; the night sky is one setting away", () => {
+  assert.equal(G.normBackground(undefined), "plain");
+  assert.equal(G.normBackground("anything else"), "plain");
+  assert.equal(G.normBackground("sky"), "sky");
+  assert.deepEqual(G.backgroundLayers("plain"), { network: false, nebula: 0 }, "no stars, constellations or nebula");
+  assert.deepEqual(G.backgroundLayers("sky"), { network: true, nebula: 1 });
+});

@@ -205,3 +205,14 @@ export function displacementScale(p, t, level) {
   const v = p.base + breath * 0.04 * (p.amp > 0.1 ? 1 : 0.2) + level.voice * p.amp * 0.55 + level.bass * p.amp * 0.35;
   return Math.max(-0.45, Math.min(0.45, v));
 }
+
+// Home-screen background (Kevin, 2026-10-23): "plain" - just the orb and her cards on a black (or light) screen - is
+// the default; "sky" is the night sky with real constellations, a starfield and distant galaxies. Each person picks
+// on the star button by the theme switch; the choice is remembered on that device.
+export const BACKGROUNDS = ["plain", "sky"];
+export function normBackground(v) { return BACKGROUNDS.includes(v) ? v : "plain"; }
+// what to draw for a background: the plain screen skips the sky sphere and the nebula wash (the orb's glow stays)
+export function backgroundLayers(bg) {
+  const sky = normBackground(bg) === "sky";
+  return { network: sky, nebula: sky ? 1 : 0 };
+}
