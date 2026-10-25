@@ -472,10 +472,17 @@ def respond(user_text, extra_context="", reporting=False, voice=False):
 
 def apply_skill(skill, text):
     """Run one of the user's skills on some text and return the result. Called from inside a turn (lock held)."""
-    r = _chat([{"role": "system", "content": f"You are applying the skill \"{skill['name']}\". Follow these "
-                                             f"instructions exactly and return only the result:\n\n{skill['instructions']}"},
-               {"role": "user", "content": text}], use_tools=False, temperature=0.5)
-    return humanize.clean(_strip_think(r.message.content))   # same cleanup as her replies (no ** or em dashes)
+    sid = skill.get("id")
+    if sid:
+        pc_features.WORKING.add(sid)   # the constellation spotlight: this skill's card flies to the front while it runs
+    try:
+        r = _chat([{"role": "system", "content": f"You are applying the skill \"{skill['name']}\". Follow these "
+                                                 f"instructions exactly and return only the result:\n\n{skill['instructions']}"},
+                   {"role": "user", "content": text}], use_tools=False, temperature=0.5)
+        return humanize.clean(_strip_think(r.message.content))   # same cleanup as her replies (no ** or em dashes)
+    finally:
+        if sid:
+            pc_features.WORKING.discard(sid)
 
 
 def run_skill(skill, text):

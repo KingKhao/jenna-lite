@@ -316,6 +316,11 @@ async function startConstellation(g) {
     const [mod, d] = await Promise.all([import("/galaxy/constellation.js"), api("/api/constellation")]);
     if (galaxy !== g) return;   // left home while loading
     constel = mod.createConstellation(g, d.agents); window.constellation = constel; constel.setWorking(d.working);
+    clearInterval(constelPoll);
+    constelPoll = setInterval(async () => {   // live working state: a running skill's card flies to the front
+      if (!constel) return;
+      try { const wd = await api("/api/constellation/working"); constel.setWorking(wd.working); } catch (e) {}
+    }, 2500);
   } catch (e) { console.warn("constellation", e); }
 }
 function stopConstellation() {

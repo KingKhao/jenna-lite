@@ -68,7 +68,7 @@ function cardTexture(name, rank, color) {
   g.shadowColor = color; g.shadowBlur = 16;
   rr(g, x, y, w, h, r);
   const body = g.createLinearGradient(0, y, 0, y + h);
-  body.addColorStop(0, "#111a29"); body.addColorStop(1, "#0b1018");
+  body.addColorStop(0, "rgba(17,26,41,.55)"); body.addColorStop(1, "rgba(11,16,24,.55)");   // semi-transparent: the galaxy shows through the card
   g.fillStyle = body; g.fill();
   g.restore();
   rr(g, x, y, w, h, r);
@@ -92,6 +92,8 @@ export function createConstellation(galaxy, agents = []) {
   container.appendChild(layer);
   const items = new Map(), effects = [];
   const v = new THREE.Vector3();
+  const op = new THREE.Vector3();   // scratch: a card's orbit position before the spotlight blend
+  const SPOT_POS = new THREE.Vector3(0, 0, 2.1);   // the spotlight: front and center, well clear of the orb
 
   function add(a, i = items.size) {
     if (items.has(a.id)) return items.get(a.id);
@@ -108,17 +110,18 @@ export function createConstellation(galaxy, agents = []) {
     label.style.cssText = "position:absolute;left:0;top:0;transform:translate(-50%,0);text-align:center;white-space:nowrap;" +
       "font:12px/1.25 system-ui,sans-serif;color:#e8edf5;text-shadow:0 0 6px #000;opacity:0;transition:opacity .2s;pointer-events:auto;";
     const nm = document.createElement("b"); nm.textContent = a.name;
-    const sp = document.createElement("div"); sp.textContent = a.specialty || ""; sp.style.cssText = "font-size:10.5px;opacity:.7;max-width:180px;overflow:hidden;text-overflow:ellipsis;";
+    const sp = document.createElement("div"); sp.textContent = a.specialty || ""; sp.style.cssText = "font-size:10.5px;opacity:0;transition:opacity .3s;max-width:180px;overflow:hidden;text-overflow:ellipsis;";
     label.append(nm, sp); label.title = a.specialty || ""; layer.appendChild(label);
     const h = hash01(a.id);
-    const it = { a, color, g, halo, face, label, placed: false,
-      // an ellipse sized to the visible area each frame (sx, sy = share of it), turned in the screen plane by `roll`,
-      // with only a little depth so a helper never swings up to the camera
-      // One shared orbit, evenly spaced, all turning together like a carousel (2026-10-05). Each helper used to
-      // have its own ellipse, speed and direction, so they crossed and piled up on top of each other and some ran
-      // off the screen edge. Now they keep their spacing and stay inside the view.
-      orbit: { sx: 0.82, sy: 0.7, speed: 0.045, phase: 0, roll: -0.18, depth: 0.25 + 0.15 * h },
-      flare: 0, working: false, workGlow: 0, breathe: h * 6.28 };
+    const h2 = hash01(a.id + "b"), h3 = hash01(a.id + "c");
+    const it = { a, color, g, halo, face, label, sp, placed: false,
+      // Free orbits (2026-10-19, Kevin's call - the original motion, after the 2026-10-05 carousel): each card
+      // gets its own ellipse, speed, direction and tilt, with real depth, so cards cross, swirl and swing in
+      // front of the orb as well as behind it. The carousel-era guardrails stay on purpose: positions clamp to
+      // the visible area every frame (no drifting off-screen) and labels fade/hide behind the orb.
+      orbit: { sx: 0.55 + 0.45 * h, sy: 0.5 + 0.4 * h2, speed: (0.05 + 0.06 * h2) * (h3 > 0.5 ? 1 : -1),
+               phase: h * 6.28, roll: -0.6 + 1.2 * h3, depth: 0.85 + 0.5 * h2 },
+      flare: 0, working: false, workGlow: 0, spot: 0, breathe: h * 6.28 };
     items.set(a.id, it);
     return it;
   }
@@ -151,7 +154,11 @@ export function createConstellation(galaxy, agents = []) {
   }
   function setWorking(ids) {
     const want = new Set(ids);
-    for (const [id, it] of items) it.working = want.has(id);
+    for (const [id, it] of items) {
+      const was = it.working;
+      it.working = want.has(id);
+      if (it.working && !was) dispatch(id);   // a skill just started: fire the beam out to its card
+    }
   }
 
   const hide = () => layer.style.display = "none", show = () => layer.style.display = "";
@@ -166,22 +173,25 @@ export function createConstellation(galaxy, agents = []) {
     // orb's screen radius, to hide labels directly behind it
     v.set(1.1, 0, 0).project(camera); const orbR = Math.abs(v.x) * w / 2;
     const all = [...items.values()];
-    all.forEach((it, k) => { it.orbit.phase = (k / all.length) * Math.PI * 2; });   // even spacing for any count
     for (const it of all) {
       const o = it.orbit, t = ctx.reduced ? o.phase : o.phase + ctx.clock * o.speed;
       // clear of the orb, but never wider than the view minus the avatar itself (a floor of 1.9 put Scout half off
       // the screen in a 900 px window)
       const rx = Math.min(halfW - 0.32, Math.max(1.6, halfW * o.sx));
       const ex = Math.cos(t) * rx, ey = Math.sin(t) * Math.min(halfH * o.sy, halfH - 0.3);
-      it.g.position.set(ex * Math.cos(o.roll) - ey * Math.sin(o.roll), ex * Math.sin(o.roll) + ey * Math.cos(o.roll),
-                        Math.sin(t + 0.6) * 0.9 * o.depth);   // a gentle tilt: in front for part of the lap
+      op.set(ex * Math.cos(o.roll) - ey * Math.sin(o.roll), ex * Math.sin(o.roll) + ey * Math.cos(o.roll),
+             Math.sin(t + 0.6) * o.depth);   // real depth: in front of the orb on half the lap, behind on the other
+      // spotlight: while a skill runs, its card leaves the orbit and floats front and center, anime-style
+      it.spot = EASE(it.spot, it.working ? 1 : 0, 0.06, dt);
+      const ss = it.spot * it.spot * (3 - 2 * it.spot);   // smoothstep: the flight eases out and back
+      it.g.position.copy(op).lerp(SPOT_POS, ss);
       it.flare = EASE(it.flare, 0, 0.04, dt);
       it.workGlow = EASE(it.workGlow, it.working ? 1 : 0, 0.05, dt);
       const breathe = 0.5 + 0.08 * Math.sin(ctx.clock * 1.1 + it.breathe);
       const pulse = it.workGlow * (0.35 + 0.35 * (0.5 + 0.5 * Math.sin(now / 260)));
       it.halo.material.opacity = Math.min(1, breathe + pulse + it.flare * 0.6);
-      it.halo.scale.setScalar(0.62 * (1 + it.flare * 0.8 + it.workGlow * 0.25));
-      const faceScale = 0.3 * (1 + it.flare * 0.25);
+      it.halo.scale.setScalar(0.62 * (1 + it.flare * 0.8 + it.workGlow * 0.25 + ss * 1.1));
+      const faceScale = 0.3 * (1 + it.flare * 0.25) * (1 + 1.5 * ss);
       it.face.scale.set(faceScale, faceScale * (CARD_H / CARD_W), 1);   // flare without losing the card's aspect
       it.label.style.color = light ? "#1d2633" : "#e8edf5"; it.label.style.textShadow = light ? "0 0 6px #fff" : "0 0 6px #000";
       // label: below the avatar on screen; dim on the far side, hidden right behind the orb, stacked by depth
@@ -189,8 +199,12 @@ export function createConstellation(galaxy, agents = []) {
       const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * hgt, far = it.g.position.z < 0;
       const behind = far && Math.hypot(sx - w / 2, sy - hgt / 2) < orbR;
       it.lx = Math.min(Math.max(sx, 90), w - 90);   // keep the name on screen near the edges
-      it.ly = sy + 20; it.front = 1 - v.z; it.hidden = behind;
-      it.label.style.opacity = behind ? "0" : far ? "0.38" : "0.92";
+      // the label hangs below the card itself (never over it): offset by the card's on-screen half-height
+      const hz = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.max(camera.position.z - it.g.position.z, 0.2);
+      it.ly = sy + (it.face.scale.y * 0.5) * (hgt / (2 * hz)) + 10;
+      it.front = 1 - v.z; it.hidden = behind;
+      it.label.style.opacity = behind ? "0" : ss > 0.25 ? "1" : far ? "0.38" : "0.92";
+      it.sp.style.opacity = (it.workGlow * 0.92).toFixed(2);   // the definition shows only while the skill runs
       it.label.style.zIndex = String(Math.round((1 - v.z) * 1000));
       it.face.material.opacity = behind ? 0.25 : 1;
       it.placed = true;
