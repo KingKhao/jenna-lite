@@ -205,3 +205,12 @@ export function displacementScale(p, t, level) {
   const v = p.base + breath * 0.04 * (p.amp > 0.1 ? 1 : 0.2) + level.voice * p.amp * 0.55 + level.bass * p.amp * 0.35;
   return Math.max(-0.45, Math.min(0.45, v));
 }
+
+// Jenna Lite uses a plain background; the night-sky option was removed on 2026-10-29.
+export const BACKGROUNDS = ["plain"];
+// Old saved "sky" preferences are intentionally ignored after removal of the feature.
+export function normBackground(_v) { return "plain"; }
+// what to draw for a background: the plain screen skips the sky sphere and the nebula wash (the orb's glow stays)
+export function backgroundLayers(bg) {
+  return { network: false, nebula: 0 };
+}

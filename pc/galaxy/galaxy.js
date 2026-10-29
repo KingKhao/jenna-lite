@@ -57,7 +57,7 @@ void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = -mv.xyz; vN =
 
 const SKY_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 const SKY_FRAG = /* glsl */`
-uniform float uTime, uAspect, uLight, uEnergy, uGlow; uniform vec3 uOrb;
+uniform float uTime, uAspect, uLight, uEnergy, uGlow, uNebula; uniform vec3 uOrb;
 varying vec2 vUv;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
@@ -82,7 +82,7 @@ void main(){
   float n3 = smoothstep(0.56, 0.90, fbm(sp * 2.9 + vec2(t * 0.5, t) + 9.0));
   float neb = 0.30 + 0.35 * uEnergy;   // a wash behind the stars, not a feature of its own
   vec3 nebula = n1 * vec3(0.05, 0.30, 0.24) + n2 * vec3(0.20, 0.07, 0.32) + n3 * vec3(0.05, 0.12, 0.38);
-  col += nebula * neb * mix(0.55, 0.22, uLight) * (uLight > 0.5 ? -0.6 : 1.0);
+  col += nebula * neb * mix(0.55, 0.22, uLight) * (uLight > 0.5 ? -0.6 : 1.0) * uNebula;   // 0 on the plain background
   float bloom = exp(-r * r * 9.0) * 0.55 + exp(-r * r * 30.0) * 0.35 + exp(-r * r * 2.2) * 0.12;
   col += uOrb * bloom * (0.18 + uGlow * 0.35 + uEnergy * 0.45) * mix(1.0, 0.35, uLight);
   col += vec3(0.75, 0.95, 1.0) * exp(-r * r * 260.0) * 0.12 * (1.0 - uLight);   // tiny pale-cyan core
@@ -137,6 +137,7 @@ export function createGalaxy(container, opts = {}) {
                   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
   const mqDark = matchMedia("(prefers-color-scheme: dark)"), mqReduce = matchMedia("(prefers-reduced-motion: reduce)");
   let theme = o.theme || store.get("galaxy-theme") || "dark";   // night mode by default; the toggle remembers a choice
+  let background = G.normBackground(o.background || store.get("galaxy-background"));   // plain unless they pick the sky
   let reduced = mqReduce.matches;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -155,7 +156,7 @@ export function createGalaxy(container, opts = {}) {
   const skyScene = new THREE.Scene(), skyCam = new THREE.Camera();
   const skyMat = new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, depthTest: false, depthWrite: false,
     uniforms: { uTime: { value: 0 }, uAspect: { value: 1 }, uLight: { value: 0 }, uEnergy: { value: 0 }, uGlow: { value: 0.3 },
-                uOrb: { value: colorVec(G.FORGE) } } });
+                uNebula: { value: 0 }, uOrb: { value: colorVec(G.FORGE) } } });
   const skyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), skyMat);
   skyQuad.frustumCulled = false; skyScene.add(skyQuad);
 
@@ -261,6 +262,8 @@ export function createGalaxy(container, opts = {}) {
     for (const m of [nodeMat, dustMat, lineMat, orbMat, glowMat, ...ringMats, ...galaxyMats]) { m.blending = blend; m.needsUpdate = true; }
     lineMat.color.set(light ? 0x3b5578 : 0x9fc6ff);
     container.dataset.theme = theme;
+    skyMat.uniforms.uNebula.value = G.backgroundLayers(background).nebula;
+    container.dataset.background = background;
   }
   function applyPerf(perf) {
     pxRatio = perf ? 1 : Math.min(window.devicePixelRatio || 1, 2);
@@ -339,7 +342,7 @@ export function createGalaxy(container, opts = {}) {
     renderer.setClearColor(theme === "light" ? 0xeef2f8 : 0x02040b, 1);
     renderer.clear();
     if (o.layers.sky) renderer.render(skyScene, skyCam);
-    if (o.layers.network) renderer.render(netScene, netCam);
+    if (o.layers.network && G.backgroundLayers(background).network) renderer.render(netScene, netCam);
     renderer.clearDepth();
     for (const h of frameHooks) { try { h(dt, { clock, reduced, energy, state, color: c1, perf: perfState.perf }); } catch (e) { console.warn("galaxy hook", e); } }
     if (o.layers.orb) renderer.render(orbScene, orbCam);
@@ -357,6 +360,8 @@ export function createGalaxy(container, opts = {}) {
     getState: () => state,
     setTheme(t) { theme = t === "light" ? "light" : "dark"; store.set("galaxy-theme", theme); applyTheme(); },
     getTheme: () => theme,
+    setBackground(b) { background = G.normBackground(b); store.set("galaxy-background", background); applyTheme(); },
+    getBackground: () => background,
     setPerformance(mode) { perfMode = mode; const ps = G.perfStep(perfState, fpsAvg, 0, mode); if (ps.perf !== perfState.perf) applyPerf(ps.perf); perfState = ps; },
     setReducedMotion(on) { reduced = !!on; },
     attachMic(stream) { this.detachMic(); try { micTap = tap(ac().createMediaStreamSource(stream)); } catch (e) { micTap = null; } },
