@@ -206,13 +206,11 @@ export function displacementScale(p, t, level) {
   return Math.max(-0.45, Math.min(0.45, v));
 }
 
-// Home-screen background (Kevin, 2026-10-23): "plain" - just the orb and her cards on a black (or light) screen - is
-// the default; "sky" is the night sky with real constellations, a starfield and distant galaxies. Each person picks
-// on the star button by the theme switch; the choice is remembered on that device.
-export const BACKGROUNDS = ["plain", "sky"];
-export function normBackground(v) { return BACKGROUNDS.includes(v) ? v : "plain"; }
+// Jenna Lite uses a plain background; the night-sky option was removed on 2026-10-29.
+export const BACKGROUNDS = ["plain"];
+// Old saved "sky" preferences are intentionally ignored after removal of the feature.
+export function normBackground(_v) { return "plain"; }
 // what to draw for a background: the plain screen skips the sky sphere and the nebula wash (the orb's glow stays)
 export function backgroundLayers(bg) {
-  const sky = normBackground(bg) === "sky";
-  return { network: sky, nebula: sky ? 1 : 0 };
+  return { network: false, nebula: 0 };
 }

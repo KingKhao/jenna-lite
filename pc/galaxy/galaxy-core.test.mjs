@@ -91,10 +91,10 @@ test("orb displacement: barely ripples at rest, clamped when loud", () => {
   assert.equal(loud, 0.45);
 });
 
-test("the home screen is plain by default; the night sky is one setting away", () => {
+test("the removed sky cannot return from an old saved preference", () => {
   assert.equal(G.normBackground(undefined), "plain");
   assert.equal(G.normBackground("anything else"), "plain");
-  assert.equal(G.normBackground("sky"), "sky");
+  assert.equal(G.normBackground("sky"), "plain");
   assert.deepEqual(G.backgroundLayers("plain"), { network: false, nebula: 0 }, "no stars, constellations or nebula");
-  assert.deepEqual(G.backgroundLayers("sky"), { network: true, nebula: 1 });
+  assert.deepEqual(G.backgroundLayers("sky"), { network: false, nebula: 0 });
 });
