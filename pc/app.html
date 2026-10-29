@@ -296,14 +296,10 @@ async function homeOn() {
     galaxy = galMod.createGalaxy($("home-host"), { seed: 7 });
     window.galaxy = galaxy;
     const sw = document.createElement("div"); sw.className = "g-theme"; sw.setAttribute("role", "group"); sw.setAttribute("aria-label", "Theme");
-    sw.innerHTML = `<button data-t="dark" aria-label="Dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><button data-t="light" aria-label="Light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button data-bg="sky" aria-label="Night sky background" title="Night sky background"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 4.6 4.9.4-3.7 3.2 1.1 4.8L12 13.5 7.8 16l1.1-4.8L5.2 8l4.9-.4z"/></svg></button>`;
+    sw.innerHTML = `<button data-t="dark" aria-label="Dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><button data-t="light" aria-label="Light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>`;
     const paint = () => { document.getElementById("v-home").dataset.theme = galaxy.getTheme();
-      sw.querySelectorAll("button[data-t]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.t === galaxy.getTheme())));
-      sw.querySelectorAll("button[data-bg]").forEach(b => b.setAttribute("aria-pressed", String(galaxy.getBackground() === "sky"))); };
+      sw.querySelectorAll("button[data-t]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.t === galaxy.getTheme()))); };
     sw.querySelectorAll("button[data-t]").forEach(b => b.onclick = ev => { ev.stopPropagation(); galaxy.setTheme(b.dataset.t); paint(); });
-    // the star: night sky on or off (plain is the default; remembered on this device)
-    sw.querySelectorAll("button[data-bg]").forEach(b => b.onclick = ev => { ev.stopPropagation();
-      galaxy.setBackground(galaxy.getBackground() === "sky" ? "plain" : "sky"); paint(); });
     $("home-host").appendChild(sw); paint();
     galaxy.setState(galShown);
     startConstellation(galaxy);
